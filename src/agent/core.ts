@@ -2,7 +2,6 @@ import Anthropic from "@anthropic-ai/sdk";
 import type {
   ChatMessage,
   DebateTrace,
-  DealIQ,
   Lead,
   ToolCallRecord,
 } from "@/lib/types";

@@ -22,13 +22,13 @@ export async function POST(req: Request) {
   const parsed = BodySchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "Invalid body", details: parsed.error.flatten() },
+      { error: "Invalid body", details: z.treeifyError(parsed.error) },
       { status: 400 },
     );
   }
 
   const { leadId, message } = parsed.data;
-  let lead =
+  const lead =
     (leadId ? await getLead(leadId) : undefined) ?? emptyLead();
 
   try {
