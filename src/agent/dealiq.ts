@@ -1,7 +1,6 @@
-import Anthropic from "@anthropic-ai/sdk";
 import type { ChatMessage, DealIQ } from "@/lib/types";
 import { DEAL_IQ_SCORER_PROMPT } from "./prompts";
-import { getAnthropic, SCORER_MODEL } from "./client";
+import { getGroq, SCORER_MODEL } from "./client";
 
 const EMPTY_IQ: DealIQ = {
   total: 0,
@@ -35,7 +34,7 @@ export async function scoreDealIQ(
   latestUserMessage: string,
   previous?: DealIQ,
 ): Promise<DealIQ> {
-  const client: Anthropic | null = getAnthropic();
+  const client = getGroq();
   if (!client) {
     return heuristicScore(latestUserMessage, previous);
   }
@@ -48,16 +47,17 @@ export async function scoreDealIQ(
   const userBlock = `Conversation so far:\n${conversation}\n\nLatest visitor message:\n"${latestUserMessage}"\n\nPrevious score (for reference): ${previous ? JSON.stringify(previous) : "none"}\n\nReturn the updated JSON score.`;
 
   try {
-    const res = await client.messages.create({
+    const res = await client.chat.completions.create({
       model: SCORER_MODEL,
       max_tokens: 400,
-      system: DEAL_IQ_SCORER_PROMPT,
-      messages: [{ role: "user", content: userBlock }],
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: DEAL_IQ_SCORER_PROMPT },
+        { role: "user", content: userBlock },
+      ],
     });
-    const text = res.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("\n");
+    const text = res.choices[0]?.message?.content ?? "";
     const parsed = JSON.parse(extractJson(text)) as Partial<DealIQ>;
     return {
       budget: clamp(parsed.budget),

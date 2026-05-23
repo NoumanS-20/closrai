@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Groq from "groq-sdk";
 import type {
   BookedMeeting,
   CompanyEnrichment,
@@ -6,87 +6,105 @@ import type {
   Lead,
 } from "@/lib/types";
 import { runObjectionDebate } from "./debate";
-import { AGENT_MODEL, getAnthropic } from "./client";
+import { AGENT_MODEL, getGroq } from "./client";
 import { FOLLOW_UP_EMAIL_PROMPT } from "./prompts";
 
-export const TOOLS: Anthropic.Tool[] = [
+type GroqTool = Groq.Chat.Completions.ChatCompletionTool;
+
+export const TOOLS: GroqTool[] = [
   {
-    name: "enrich_company",
-    description:
-      "Research a prospect's company from their website URL or domain. Returns industry, rough size, tech stack hints, and a short summary. Call this exactly once per conversation when the visitor reveals their company.",
-    input_schema: {
-      type: "object",
-      properties: {
-        domain: {
-          type: "string",
-          description: "Company domain or full URL (e.g. acme.com or https://acme.com).",
+    type: "function",
+    function: {
+      name: "enrich_company",
+      description:
+        "Research a prospect's company from their website URL or domain. Returns industry, rough size, tech stack hints, and a short summary. Call this exactly once per conversation when the visitor reveals their company.",
+      parameters: {
+        type: "object",
+        properties: {
+          domain: {
+            type: "string",
+            description: "Company domain or full URL (e.g. acme.com or https://acme.com).",
+          },
         },
+        required: ["domain"],
       },
-      required: ["domain"],
     },
   },
   {
-    name: "handle_objection",
-    description:
-      "Route a visitor objection (price, time, trust, fit, competitor) to the internal Skeptic-vs-Closer debate system. Use this whenever the visitor pushes back on the product or process. Returns the message you should send to the visitor along with the internal reasoning trace.",
-    input_schema: {
-      type: "object",
-      properties: {
-        objection: {
-          type: "string",
-          description: "The visitor's objection in their own words, quoted as faithfully as possible.",
+    type: "function",
+    function: {
+      name: "handle_objection",
+      description:
+        "Route a visitor objection (price, time, trust, fit, competitor) to the internal Skeptic-vs-Closer debate system. Use this whenever the visitor pushes back on the product or process. Returns the message you should send to the visitor along with the internal reasoning trace.",
+      parameters: {
+        type: "object",
+        properties: {
+          objection: {
+            type: "string",
+            description: "The visitor's objection in their own words, quoted as faithfully as possible.",
+          },
         },
+        required: ["objection"],
       },
-      required: ["objection"],
     },
   },
   {
-    name: "book_meeting",
-    description:
-      "Propose and confirm a 30-minute meeting on the founder's calendar. Only call this once the visitor has explicitly agreed to a meeting or has Deal IQ ≥ 65 and shows clear intent.",
-    input_schema: {
-      type: "object",
-      properties: {
-        attendee_email: { type: "string", description: "Visitor's email address." },
-        attendee_name: { type: "string", description: "Visitor's name." },
-        topic: { type: "string", description: "Short topic/agenda for the meeting." },
-        preferred_day_offset_days: {
-          type: "integer",
-          description: "Days from today the visitor prefers (0 = today, 1 = tomorrow, etc.). Use 1 if unsure.",
-          minimum: 0,
-          maximum: 14,
+    type: "function",
+    function: {
+      name: "book_meeting",
+      description:
+        "Propose and confirm a 30-minute meeting on the founder's calendar. Only call this once the visitor has explicitly agreed to a meeting or has Deal IQ ≥ 65 and shows clear intent.",
+      parameters: {
+        type: "object",
+        properties: {
+          attendee_email: { type: "string", description: "Visitor's email address." },
+          attendee_name: { type: "string", description: "Visitor's name." },
+          topic: { type: "string", description: "Short topic/agenda for the meeting." },
+          preferred_day_offset_days: {
+            type: "integer",
+            description:
+              "Days from today the visitor prefers (0 = today, 1 = tomorrow, etc.). Use 1 if unsure.",
+            minimum: 0,
+            maximum: 14,
+          },
         },
+        required: ["attendee_email", "attendee_name", "topic", "preferred_day_offset_days"],
       },
-      required: ["attendee_email", "attendee_name", "topic", "preferred_day_offset_days"],
     },
   },
   {
-    name: "save_lead",
-    description:
-      "Persist what you have learned about the lead so far. Call this once when you have enough structured info (name, email, company, role) OR when the visitor disengages.",
-    input_schema: {
-      type: "object",
-      properties: {
-        name: { type: "string" },
-        email: { type: "string" },
-        company: { type: "string" },
-        role: { type: "string" },
-        company_website: { type: "string" },
-        status: {
-          type: "string",
-          enum: ["new", "qualified", "meeting_booked", "disqualified"],
+    type: "function",
+    function: {
+      name: "save_lead",
+      description:
+        "Persist what you have learned about the lead so far. Call this once when you have enough structured info (name, email, company, role) OR when the visitor disengages.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          email: { type: "string" },
+          company: { type: "string" },
+          role: { type: "string" },
+          company_website: { type: "string" },
+          status: {
+            type: "string",
+            enum: ["new", "qualified", "meeting_booked", "disqualified"],
+          },
         },
+        required: ["status"],
       },
-      required: ["status"],
     },
   },
   {
-    name: "draft_follow_up_email",
-    description:
-      "Generate a personalized follow-up email from the founder to the lead, based on the full conversation. Call this at the end of any productive conversation.",
-    input_schema: {
-      type: "object",
-      properties: {},
+    type: "function",
+    function: {
+      name: "draft_follow_up_email",
+      description:
+        "Generate a personalized follow-up email from the founder to the lead, based on the full conversation. Call this at the end of any productive conversation.",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
     },
   },
 ];
@@ -121,7 +139,9 @@ async function enrichCompany(domain: string): Promise<CompanyEnrichment> {
     if (/segment\.io|segment_io/i.test(html)) techHints.push("Segment");
     if (/intercom/i.test(html)) techHints.push("Intercom");
     if (/hubspot/i.test(html)) techHints.push("HubSpot");
-    const summary = [titleMatch?.[1], descMatch?.[1]].filter(Boolean).join(" — ") || `Public site at ${cleaned}.`;
+    const summary =
+      [titleMatch?.[1], descMatch?.[1]].filter(Boolean).join(" — ") ||
+      `Public site at ${cleaned}.`;
     let industry: string | undefined;
     if (/fintech|payments|lending|banking/i.test(html)) industry = "Fintech";
     else if (/e-?commerce|d2c|shop|retail/i.test(html)) industry = "D2C / E-commerce";
@@ -152,8 +172,7 @@ function bookMeeting(args: {
   const date = new Date();
   date.setDate(date.getDate() + Math.max(0, Math.min(14, args.preferred_day_offset_days)));
   date.setHours(15, 0, 0, 0);
-  const confirmationCode =
-    "MEET-" + Math.random().toString(36).slice(2, 8).toUpperCase();
+  const confirmationCode = "MEET-" + Math.random().toString(36).slice(2, 8).toUpperCase();
   return {
     slotIso: date.toISOString(),
     attendee: args.attendee_name,
@@ -163,27 +182,21 @@ function bookMeeting(args: {
 }
 
 async function draftFollowUpEmail(ctx: ToolContext): Promise<string> {
-  const client = getAnthropic();
+  const client = getGroq();
   const meta = `Lead: ${ctx.lead.name ?? "unknown"} (${ctx.lead.email ?? "no email"})\nCompany: ${ctx.lead.company ?? "unknown"} — ${ctx.lead.enrichment?.industry ?? "industry unknown"}\nRole: ${ctx.lead.role ?? "unknown"}\nDeal IQ: ${ctx.lead.dealIq?.total ?? "n/a"}\nMeeting: ${ctx.lead.meeting ? `${ctx.lead.meeting.slotIso} (${ctx.lead.meeting.confirmationCode})` : "not booked"}`;
   if (!client) {
     return `Subject: Following up on our chat\n\nHi ${ctx.lead.name ?? "there"},\n\nThanks for the conversation today. I'd love to share how we've helped similar ${ctx.lead.enrichment?.industry ?? "B2B"} teams cut churn meaningfully.\n\n${ctx.lead.meeting ? `Looking forward to our session on ${new Date(ctx.lead.meeting.slotIso).toLocaleString("en-IN")}.` : "Happy to share a short walkthrough whenever you have 15 minutes."}\n\nAarav Mehta\nFounder, Lumen Analytics`;
   }
-  const res = await client.messages.create({
+  const res = await client.chat.completions.create({
     model: AGENT_MODEL,
     max_tokens: 500,
-    system: FOLLOW_UP_EMAIL_PROMPT,
+    temperature: 0.6,
     messages: [
-      {
-        role: "user",
-        content: `${meta}\n\nTranscript:\n${ctx.recentTranscript}`,
-      },
+      { role: "system", content: FOLLOW_UP_EMAIL_PROMPT },
+      { role: "user", content: `${meta}\n\nTranscript:\n${ctx.recentTranscript}` },
     ],
   });
-  return res.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("\n")
-    .trim();
+  return (res.choices[0]?.message?.content ?? "").trim();
 }
 
 export async function runTool(
@@ -219,9 +232,7 @@ export async function runTool(
       };
     }
     case "book_meeting": {
-      const meeting = bookMeeting(
-        input as Parameters<typeof bookMeeting>[0],
-      );
+      const meeting = bookMeeting(input as Parameters<typeof bookMeeting>[0]);
       return {
         output: meeting,
         mutate: (lead) => ({
@@ -243,8 +254,7 @@ export async function runTool(
           email: (input.email as string) ?? lead.email,
           company: (input.company as string) ?? lead.company,
           role: (input.role as string) ?? lead.role,
-          companyWebsite:
-            (input.company_website as string) ?? lead.companyWebsite,
+          companyWebsite: (input.company_website as string) ?? lead.companyWebsite,
           status,
         }),
       };

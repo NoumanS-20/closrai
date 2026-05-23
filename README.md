@@ -43,26 +43,26 @@ Next.js 16 App Router (Vercel-deployable, all-in-one)
 
 Agent runtime (src/agent/)
   └── runAgentTurn()
-        ├── scoreDealIQ()          ── Haiku 4.5 · structured JSON scorer
-        ├── Claude tool-use loop   ── Opus 4.7 · 5 tools, ≤5 rounds
+        ├── scoreDealIQ()          ── Llama 3.1 8B (Groq) · structured JSON scorer
+        ├── Groq tool-use loop     ── Llama 3.3 70B · 5 tools, ≤5 rounds
         │     ├── enrich_company         · Live HTTP fetch + heuristic tagging
         │     ├── handle_objection       · → debate sub-system
-        │     │     ├── Skeptic           ── Haiku 4.5
-        │     │     ├── Closer            ── Haiku 4.5
-        │     │     └── Resolver          ── Haiku 4.5
+        │     │     ├── Skeptic           ── Llama 3.1 8B
+        │     │     ├── Closer            ── Llama 3.1 8B
+        │     │     └── Resolver          ── Llama 3.1 8B
         │     ├── book_meeting           · Mock calendar with confirmation code
         │     ├── save_lead              · JSON-file CRM (zero-deps demo store)
-        │     └── draft_follow_up_email  · Opus 4.7 · personalized
+        │     └── draft_follow_up_email  · Llama 3.3 70B · personalized
         └── upsertLead()            ── data/leads.json
 ```
 
 ### Why this design
 
 - **Prompt caching** (`cache_control: { type: "ephemeral" }`) on the long SDR system prompt — keeps token cost low and latency tight on multi-turn calls.
-- **Model split** — Opus 4.7 for the SDR brain and email drafting (quality matters); Haiku 4.5 for scoring, debate roles, and resolution (latency matters, cost matters, 4 calls per debate).
+- **Model split** — Llama 3.3 70B (Groq) for the SDR brain and email drafting (quality matters); Llama 3.1 8B Instant for scoring, debate roles, and resolution (latency matters, 4 calls per debate). Groq's free tier delivers 280–560 tok/s on these models, which makes the multi-agent debate feel sub-second instead of laggy.
 - **Tool-use as the spine, not RAG** — every "action" the agent takes is a real, observable tool call. No vector DB needed for this product surface, so we don't add one.
 - **JSON file store** — leads persist locally for the demo; swappable for Postgres in one file. Deliberate scope choice for a 3-day solo build.
-- **Heuristic fallback everywhere** — Deal IQ, debate, and email drafting all degrade gracefully when `ANTHROPIC_API_KEY` is absent, so judges can clone and run with zero secrets and still see the UX.
+- **Heuristic fallback everywhere** — Deal IQ, debate, and email drafting all degrade gracefully when `GROQ_API_KEY` is absent, so judges can clone and run with zero secrets and still see the UX.
 
 ---
 
@@ -73,7 +73,7 @@ git clone <this-repo>
 cd closrai
 npm install
 cp .env.local.example .env.local
-# add your ANTHROPIC_API_KEY to .env.local
+# add your GROQ_API_KEY to .env.local
 npm run dev
 ```
 
@@ -99,7 +99,7 @@ npm start
 - **React 19**
 - **TypeScript** (strict)
 - **Tailwind CSS 4**
-- **Anthropic SDK** (`@anthropic-ai/sdk` v0.98) — Claude Opus 4.7 + Haiku 4.5
+- **Groq SDK** (`groq-sdk` v1.2) — Llama 3.3 70B Versatile + Llama 3.1 8B Instant (free tier, ~280–560 tok/s)
 - **zod** for request validation
 - **No database** — JSON file persistence (`data/leads.json`)
 
@@ -111,7 +111,7 @@ npm start
 src/
   agent/
     core.ts        Agent orchestrator: scoring + tool-use loop
-    client.ts      Anthropic SDK singleton + model IDs
+    client.ts      Groq SDK singleton + model IDs
     tools.ts       Tool definitions and handlers
     debate.ts      Skeptic / Closer / Resolver sub-system
     dealiq.ts      7-dimensional lead scoring
@@ -140,7 +140,7 @@ src/
 
 | Criterion (weight) | How ClosrAI delivers |
 |---|---|
-| **Model Innovation & Novelty (30%)** | Multi-agent Skeptic-vs-Closer debate routed via Claude tool-use; transparent live Deal IQ score with explainability; model split (Opus for closing, Haiku for fast loops). |
+| **Model Innovation & Novelty (30%)** | Multi-agent Skeptic-vs-Closer debate routed via Groq tool-use; transparent live Deal IQ score with explainability; model split (Llama 3.3 70B for closing, Llama 3.1 8B for fast debate loops). |
 | **Real-World Applicability (25%)** | Solves a concrete B2B SaaS founder pain (anonymous-visitor → qualified-meeting). Every action is a real tool call: enrichment, calendar, CRM, follow-up email. |
 | **Technical Architecture (25%)** | Clean module boundaries (agent / lib / components / app), prompt caching, graceful no-key fallback, strict TypeScript, zod-validated API, ≤5-round tool loop guard. |
 | **Documentation Clarity (20%)** | This README, demo script, inline file comments, architecture ASCII diagram, README-driven file map. |

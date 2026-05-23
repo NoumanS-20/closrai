@@ -1,22 +1,22 @@
-import Anthropic from "@anthropic-ai/sdk";
+import Groq from "groq-sdk";
 
-export const AGENT_MODEL = "claude-opus-4-7";
-export const SCORER_MODEL = "claude-haiku-4-5-20251001";
-export const DEBATE_MODEL = "claude-haiku-4-5-20251001";
+export const AGENT_MODEL = "llama-3.3-70b-versatile";
+export const SCORER_MODEL = "llama-3.1-8b-instant";
+export const DEBATE_MODEL = "llama-3.1-8b-instant";
 
-let cached: Anthropic | null | undefined;
+let cached: Groq | null | undefined;
 
-export function getAnthropic(): Anthropic | null {
+export function getGroq(): Groq | null {
   if (cached !== undefined) return cached;
-  const key = process.env.ANTHROPIC_API_KEY;
+  const key = process.env.GROQ_API_KEY;
   if (!key) {
     cached = null;
     return cached;
   }
-  cached = new Anthropic({ apiKey: key });
+  cached = new Groq({ apiKey: key });
   return cached;
 }
 
-export function hasAnthropic(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY);
+export function hasGroq(): boolean {
+  return Boolean(process.env.GROQ_API_KEY);
 }

@@ -1,7 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Groq from "groq-sdk";
 import type { DebateTrace, Lead } from "@/lib/types";
 import { CLOSER_PROMPT, RESOLUTION_PROMPT, SKEPTIC_PROMPT } from "./prompts";
-import { DEBATE_MODEL, getAnthropic } from "./client";
+import { DEBATE_MODEL, getGroq } from "./client";
 
 interface DebateInput {
   objection: string;
@@ -14,22 +14,21 @@ interface DebateOutput {
   reply: string;
 }
 
-async function singleShot(client: Anthropic, system: string, user: string): Promise<string> {
-  const res = await client.messages.create({
+async function singleShot(client: Groq, system: string, user: string): Promise<string> {
+  const res = await client.chat.completions.create({
     model: DEBATE_MODEL,
     max_tokens: 350,
-    system,
-    messages: [{ role: "user", content: user }],
+    temperature: 0.6,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
   });
-  return res.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("\n")
-    .trim();
+  return (res.choices[0]?.message?.content ?? "").trim();
 }
 
 export async function runObjectionDebate(input: DebateInput): Promise<DebateOutput> {
-  const client = getAnthropic();
+  const client = getGroq();
   const context = `Lead context:\n- Company: ${input.lead.company ?? "unknown"}\n- Role: ${input.lead.role ?? "unknown"}\n- Industry: ${input.lead.enrichment?.industry ?? "unknown"}\n- Deal IQ: ${input.lead.dealIq?.total ?? "n/a"}\n\nRecent transcript:\n${input.recentTranscript}\n\nObjection raised:\n"${input.objection}"`;
 
   if (!client) {

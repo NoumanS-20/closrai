@@ -13,18 +13,18 @@ flowchart LR
 
   subgraph Agent_Runtime[Agent runtime]
     direction TB
-    Turn[runAgentTurn] --> Score[scoreDealIQ - Haiku 4.5]
-    Turn --> Loop[Claude tool-use loop - Opus 4.7]
+    Turn[runAgentTurn] --> Score[scoreDealIQ - Llama 3.1 8B]
+    Turn --> Loop[Groq tool-use loop - Llama 3.3 70B]
     Loop -->|tool: enrich_company| Enrich[Live web fetch + heuristic tags]
     Loop -->|tool: handle_objection| Debate
     Loop -->|tool: book_meeting| Cal[Mock calendar]
     Loop -->|tool: save_lead| Store
-    Loop -->|tool: draft_follow_up_email| Email[Opus 4.7]
+    Loop -->|tool: draft_follow_up_email| Email[Llama 3.3 70B]
     subgraph Debate[Skeptic vs Closer debate]
       direction TB
-      Skeptic[Skeptic - Haiku 4.5]
-      Closer[Closer - Haiku 4.5]
-      Resolver[Resolver - Haiku 4.5]
+      Skeptic[Skeptic - Llama 3.1 8B]
+      Closer[Closer - Llama 3.1 8B]
+      Resolver[Resolver - Llama 3.1 8B]
       Skeptic --> Closer --> Resolver
     end
     Turn --> Store[(Lead store)]
@@ -47,9 +47,9 @@ sequenceDiagram
   participant API as /api/chat
   participant Core as runAgentTurn
   participant Scorer as scoreDealIQ
-  participant LLM as Claude (Opus)
+  participant LLM as Groq (Llama 3.3 70B)
   participant Tool as Tool handler
-  participant DB as Debate (Haiku x3)
+  participant DB as Debate (Llama 3.1 8B x3)
   participant S as Store
 
   U->>API: POST { leadId?, message }
