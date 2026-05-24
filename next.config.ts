@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  distDir: "node_modules/.cache/next-build",
 };
 
 export default nextConfig;
