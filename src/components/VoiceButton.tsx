@@ -6,7 +6,6 @@ interface Props {
   onTranscript: (text: string) => void;
   speakingText?: string;
   disabled?: boolean;
-  accent?: "emerald" | "sky" | "violet";
 }
 
 interface BrowserSpeechRecognition extends EventTarget {
@@ -32,12 +31,6 @@ declare global {
   }
 }
 
-const ACCENT_CLASSES: Record<NonNullable<Props["accent"]>, string> = {
-  emerald: "border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10",
-  sky: "border-sky-500/40 text-sky-300 hover:bg-sky-500/10",
-  violet: "border-violet-500/40 text-violet-300 hover:bg-violet-500/10",
-};
-
 function getSpeechCtor(): SpeechCtor | undefined {
   if (typeof window === "undefined") return undefined;
   return window.SpeechRecognition ?? window.webkitSpeechRecognition;
@@ -48,72 +41,58 @@ function subscribeNoop(): () => void {
 }
 
 /**
- * Pick the smoothest, most welcoming-sounding voice available on the device.
- *
- * Order of preference:
- *   1. Modern neural/online voices (Google "online", Microsoft "Natural", etc.)
- *      — these are dramatically more natural than the default offline voices.
- *   2. Known-good named voices ("Samantha" on macOS/iOS is the friendliest stock voice;
- *      "Google US English" on Chrome desktop is the second-best).
- *   3. Any en-US/en-IN female voice (generally friendlier-sounding default).
- *   4. Any en-* voice as fallback.
- *   5. Whatever the browser gives us.
- *
- * We avoid the default Microsoft David / Zira / Mark on Windows because they
- * sound robotic — but if those are all that's available, that's what we use.
+ * Pick the smoothest available TTS voice. Preference order:
+ * 1. Indian-English natural/online voices (Google/Microsoft/Apple)
+ * 2. Any US/UK/AU English natural/online voice
+ * 3. Default English voice
  */
-function pickFriendlyVoice(
-  voices: SpeechSynthesisVoice[],
-): SpeechSynthesisVoice | undefined {
-  if (voices.length === 0) return undefined;
-  const en = voices.filter((v) => v.lang.toLowerCase().startsWith("en"));
-  const pool = en.length > 0 ? en : voices;
+function pickVoice(): SpeechSynthesisVoice | null {
+  if (typeof window === "undefined" || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length === 0) return null;
 
-  const scored = pool
-    .map((v) => ({ voice: v, score: scoreVoice(v) }))
-    .sort((a, b) => b.score - a.score);
+  // Names we know to be smoother than the robotic Microsoft David/Zira defaults.
+  const PREFERRED_NAME_HINTS = [
+    "Google UK English Female",
+    "Google US English",
+    "Google English",
+    "Samantha",
+    "Karen",
+    "Daniel",
+    "Microsoft Neerja Online",
+    "Microsoft Aria Online",
+    "Microsoft Jenny Online",
+    "Microsoft Guy Online",
+    "Microsoft Sonia Online",
+    "Microsoft Libby Online",
+    "Natural",
+  ];
 
-  return scored[0]?.voice;
+  const englishVoices = voices.filter((v) => v.lang.startsWith("en"));
+
+  // First pass: explicit preferred names
+  for (const hint of PREFERRED_NAME_HINTS) {
+    const match = englishVoices.find((v) => v.name.includes(hint));
+    if (match) return match;
+  }
+
+  // Second pass: any "natural"/"online"/"neural" voice
+  const naturalish = englishVoices.find((v) =>
+    /natural|online|neural|premium/i.test(v.name),
+  );
+  if (naturalish) return naturalish;
+
+  // Third pass: prefer en-IN, else any English
+  return (
+    englishVoices.find((v) => v.lang === "en-IN") ??
+    englishVoices.find((v) => v.lang === "en-GB") ??
+    englishVoices.find((v) => v.lang === "en-US") ??
+    englishVoices[0] ??
+    null
+  );
 }
 
-function scoreVoice(v: SpeechSynthesisVoice): number {
-  const name = v.name.toLowerCase();
-  let score = 0;
-
-  // Strong positive signals: neural / online voices
-  if (/natural|neural|online|wavenet|premium|enhanced/.test(name)) score += 100;
-
-  // Modern Google / Microsoft online voices
-  if (/google/.test(name) && /(en-us|english)/i.test(name + " " + v.lang)) score += 60;
-  if (/microsoft.*(?:aria|jenny|guy|ana|libby|natasha)/.test(name)) score += 80;
-
-  // Named-good stock voices
-  if (/samantha|karen|moira|tessa|fiona|allison|ava/.test(name)) score += 70;
-
-  // Friendlier-sounding female-coded voices by default
-  if (/female|woman|girl/.test(name)) score += 20;
-
-  // Locale boosts (prefer en-US then en-IN for Indian hackathon context)
-  if (v.lang.toLowerCase() === "en-us") score += 15;
-  if (v.lang.toLowerCase() === "en-in") score += 12;
-  if (v.lang.toLowerCase() === "en-gb") score += 10;
-
-  // Demote the robotic Windows defaults — they sound metallic
-  if (/david|mark|zira|hazel/.test(name)) score -= 30;
-
-  // Default voice gets a small boost so we don't override the user's OS choice
-  // when nothing else stands out
-  if (v.default) score += 3;
-
-  return score;
-}
-
-export function VoiceButton({
-  onTranscript,
-  speakingText,
-  disabled,
-  accent = "emerald",
-}: Props) {
+export function VoiceButton({ onTranscript, speakingText, disabled }: Props) {
   const supported = useSyncExternalStore(
     subscribeNoop,
     () => Boolean(getSpeechCtor()),
@@ -169,17 +148,18 @@ export function VoiceButton({
     lastSpokenRef.current = speakingText;
     const synth = window.speechSynthesis;
     if (!synth) return;
+    synth.cancel();
 
     const speak = () => {
-      synth.cancel();
       const utter = new SpeechSynthesisUtterance(speakingText);
-      const voice = pickFriendlyVoice(synth.getVoices());
+      const voice = pickVoice();
       if (voice) {
         utter.voice = voice;
         utter.lang = voice.lang;
       } else {
-        utter.lang = "en-US";
+        utter.lang = "en-IN";
       }
+      // Slightly slower + warmer pitch than defaults — friendlier, less rushed
       utter.rate = 0.96;
       utter.pitch = 1.05;
       utter.volume = 1;
@@ -189,17 +169,17 @@ export function VoiceButton({
       synth.speak(utter);
     };
 
-    // Voices may load async on Chrome — wait one tick if the list is empty.
-    if (synth.getVoices().length > 0) {
-      speak();
-    } else {
+    // Some browsers populate the voices list asynchronously the first time
+    if (synth.getVoices().length === 0) {
       const handler = () => {
-        synth.removeEventListener("voiceschanged", handler);
+        synth.removeEventListener?.("voiceschanged", handler);
         speak();
       };
-      synth.addEventListener("voiceschanged", handler);
-      // Fallback in case the event never fires
-      setTimeout(speak, 300);
+      synth.addEventListener?.("voiceschanged", handler);
+      // safety: fire anyway in case the event never fires
+      setTimeout(speak, 250);
+    } else {
+      speak();
     }
   }, [speakingText]);
 
@@ -226,20 +206,11 @@ export function VoiceButton({
         onClick={toggleListen}
         disabled={disabled}
         aria-pressed={listening}
-        aria-label={
-          listening
-            ? "Stop listening (voice input on)"
-            : "Start voice input"
-        }
+        aria-label={listening ? "Stop listening (voice input on)" : "Start voice input"}
         title={listening ? "Stop listening" : "Speak to the bot"}
-        className={`relative h-9 w-9 shrink-0 inline-flex items-center justify-center rounded-xl border bg-zinc-900 disabled:opacity-40 transition-colors ${ACCENT_CLASSES[accent]}`}
+        className={"voice-btn" + (listening ? " is-listening" : "") + (speaking ? " is-speaking" : "")}
       >
-        {listening ? (
-          <span
-            aria-hidden="true"
-            className="absolute inset-0 rounded-xl border border-current animate-ping"
-          />
-        ) : null}
+        {listening && <span aria-hidden="true" className="voice-btn__pulse" />}
         <svg
           viewBox="0 0 24 24"
           fill="none"
@@ -247,7 +218,8 @@ export function VoiceButton({
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className="w-4 h-4"
+          width="18"
+          height="18"
           aria-hidden="true"
         >
           <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
@@ -255,22 +227,62 @@ export function VoiceButton({
           <path d="M12 18v4" />
           <path d="M8 22h8" />
         </svg>
-        {speaking && (
-          <span
-            aria-hidden="true"
-            className="absolute -bottom-1 -right-1 text-[8px] bg-zinc-950 px-1 rounded-full"
-          >
-            🔊
-          </span>
-        )}
       </button>
-      {/* Screen-reader-only announcement — the visible text is already in the
-          chat bubble above the input, so we don't duplicate it on screen. */}
+      {/* Screen-reader-only "reading aloud" cue so blind users get a polite
+          announcement without showing a duplicate caption to sighted users
+          (the transcript already shows the spoken text). */}
       {speaking && speakingText && (
-        <div role="status" aria-live="polite" className="sr-only">
-          Reading aloud: {speakingText}
-        </div>
+        <span className="sr-only" role="status" aria-live="polite">
+          Reading aloud.
+        </span>
       )}
+
+      <style>{`
+        .voice-btn {
+          position: relative;
+          width: 40px; height: 40px;
+          border-radius: 50%;
+          background: var(--surface);
+          color: var(--ink-soft);
+          border: 1px solid var(--line);
+          cursor: pointer;
+          display: inline-flex; align-items: center; justify-content: center;
+          flex-shrink: 0;
+          transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+        }
+        .voice-btn:hover:not(:disabled) {
+          background: var(--surface-2); color: var(--ink);
+        }
+        .voice-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .voice-btn.is-listening {
+          color: white;
+          background: var(--terracotta);
+          border-color: var(--terracotta-deep);
+        }
+        .voice-btn__pulse {
+          position: absolute;
+          inset: -4px;
+          border-radius: 50%;
+          border: 2px solid var(--terracotta);
+          opacity: 0.6;
+          animation: voice-pulse 1.4s ease-out infinite;
+          pointer-events: none;
+        }
+        @keyframes voice-pulse {
+          0%   { transform: scale(0.95); opacity: 0.6; }
+          70%  { transform: scale(1.2);  opacity: 0; }
+          100% { transform: scale(1.2);  opacity: 0; }
+        }
+        .voice-btn.is-speaking::after {
+          content: "";
+          position: absolute;
+          bottom: -2px; right: -2px;
+          width: 10px; height: 10px;
+          border-radius: 50%;
+          background: var(--honey);
+          border: 2px solid var(--surface);
+        }
+      `}</style>
     </>
   );
 }

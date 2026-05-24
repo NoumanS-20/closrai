@@ -19,13 +19,20 @@ export default async function EmbedPage({
   const voiceEnabled = voice !== "0" && voice !== "false";
 
   return (
-    <main id="main" className="min-h-screen bg-transparent text-zinc-100 p-2">
+    <main id="main" tabIndex={-1} className="embed-shell">
       <ChatWidget
         personaId={personaId}
         showSidebar={false}
         voiceEnabled={voiceEnabled}
         embed
       />
+      <style>{`
+        .embed-shell {
+          padding: 10px;
+          min-height: 100vh;
+          background: var(--bg);
+        }
+      `}</style>
     </main>
   );
 }

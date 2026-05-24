@@ -7,11 +7,11 @@ interface Props {
   compact?: boolean;
 }
 
-function color(total: number): string {
-  if (total >= 75) return "text-emerald-400";
-  if (total >= 50) return "text-amber-400";
-  if (total >= 25) return "text-orange-400";
-  return "text-zinc-500";
+function ringStroke(total: number): string {
+  if (total >= 75) return "oklch(0.50 0.16 145)";
+  if (total >= 50) return "oklch(0.66 0.155 38)";
+  if (total >= 25) return "oklch(0.62 0.16 60)";
+  return "oklch(0.55 0.005 60)";
 }
 
 function tier(total: number): string {
@@ -23,26 +23,24 @@ function tier(total: number): string {
 
 function Bar({ label, value }: { label: string; value: number }) {
   const v = Math.max(0, Math.min(100, value));
+  const slug = label.toLowerCase().replace(/\s+/g, "-");
   return (
-    <div className="flex items-center gap-2 text-xs">
-      <span className="w-16 text-zinc-400" id={`bar-label-${label.toLowerCase().replace(/\s+/g, "-")}`}>
+    <div className="dq-bar">
+      <span className="dq-bar__label" id={`bar-label-${slug}`}>
         {label}
       </span>
       <div
-        className="flex-1 h-1.5 rounded-full bg-zinc-800 overflow-hidden"
+        className="dq-bar__track"
         role="progressbar"
-        aria-labelledby={`bar-label-${label.toLowerCase().replace(/\s+/g, "-")}`}
+        aria-labelledby={`bar-label-${slug}`}
         aria-valuenow={v}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuetext={`${v} out of 100`}
       >
-        <div
-          className="h-full bg-gradient-to-r from-emerald-500 to-sky-400 transition-all duration-500"
-          style={{ width: `${v}%` }}
-        />
+        <div className="dq-bar__fill" style={{ width: `${v}%` }} />
       </div>
-      <span className="w-7 text-right text-zinc-300 tabular-nums" aria-hidden="true">
+      <span className="dq-bar__value" aria-hidden="true">
         {v}
       </span>
     </div>
@@ -51,8 +49,8 @@ function Bar({ label, value }: { label: string; value: number }) {
 
 export function DealIQGauge({ iq, compact }: Props) {
   const total = iq?.total ?? 0;
-  const ringSize = compact ? 56 : 96;
-  const stroke = compact ? 6 : 8;
+  const ringSize = compact ? 56 : 110;
+  const stroke = compact ? 6 : 9;
   const radius = (ringSize - stroke) / 2;
   const circ = 2 * Math.PI * radius;
   const offset = circ - (total / 100) * circ;
@@ -61,61 +59,59 @@ export function DealIQGauge({ iq, compact }: Props) {
     ? `Score ${total} out of 100, ${tier(total)} lead. ${iq.rationale ?? ""}`
     : "Score not yet available.";
 
+  const ringColor = ringStroke(total);
+
   return (
     <div
-      className={compact ? "flex items-center gap-3" : "space-y-3"}
+      className={"dq-gauge" + (compact ? " dq-gauge--compact" : "")}
       role="group"
       aria-label="Lead score breakdown"
     >
       <div
-        className="relative"
+        className="dq-gauge__ring"
         style={{ width: ringSize, height: ringSize }}
         role="img"
         aria-label={`Score ${total} out of 100`}
       >
-        <svg width={ringSize} height={ringSize} className="-rotate-90" aria-hidden="true">
+        <svg
+          width={ringSize}
+          height={ringSize}
+          viewBox={`0 0 ${ringSize} ${ringSize}`}
+          aria-hidden="true"
+        >
           <circle
             cx={ringSize / 2}
             cy={ringSize / 2}
             r={radius}
-            stroke="rgb(39 39 42)"
+            fill="none"
+            stroke="oklch(0.92 0.004 70)"
             strokeWidth={stroke}
-            fill="transparent"
           />
           <circle
             cx={ringSize / 2}
             cy={ringSize / 2}
             r={radius}
-            stroke="url(#iqGrad)"
+            fill="none"
+            stroke={ringColor}
             strokeWidth={stroke}
-            fill="transparent"
+            strokeLinecap="round"
             strokeDasharray={circ}
             strokeDashoffset={offset}
-            strokeLinecap="round"
-            className="transition-[stroke-dashoffset] duration-700 ease-out"
+            transform={`rotate(-90 ${ringSize / 2} ${ringSize / 2})`}
+            style={{ transition: "stroke-dashoffset 700ms cubic-bezier(.2,.7,.2,1)" }}
           />
-          <defs>
-            <linearGradient id="iqGrad" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#10b981" />
-              <stop offset="100%" stopColor="#38bdf8" />
-            </linearGradient>
-          </defs>
         </svg>
-        <div
-          aria-hidden="true"
-          className={`absolute inset-0 flex items-center justify-center ${color(total)} font-semibold ${compact ? "text-base" : "text-2xl"}`}
-        >
+        <div className="dq-gauge__num" aria-hidden="true">
           {total}
         </div>
       </div>
 
-      {/* Always-present, sr-only live summary for screen readers */}
       <p className="sr-only" aria-live="polite">
         {summary}
       </p>
 
       {!compact && (
-        <div className="space-y-1.5">
+        <div className="dq-gauge__bars">
           <Bar label="Need" value={iq?.need ?? 0} />
           <Bar label="Intent" value={iq?.intent ?? 0} />
           <Bar label="ICP Fit" value={iq?.icpFit ?? 0} />
@@ -127,10 +123,70 @@ export function DealIQGauge({ iq, compact }: Props) {
       )}
 
       {!compact && iq?.rationale && (
-        <p className="text-xs text-zinc-400 italic leading-snug" aria-hidden="true">
+        <p className="dq-gauge__rationale" aria-hidden="true">
           {iq.rationale}
         </p>
       )}
+
+      <style>{`
+        .dq-gauge { display: flex; flex-direction: column; gap: 14px; align-items: stretch; }
+        .dq-gauge--compact { flex-direction: row; align-items: center; gap: 12px; }
+        .dq-gauge__ring {
+          position: relative;
+          margin: 0 auto;
+        }
+        .dq-gauge__num {
+          position: absolute;
+          inset: 0;
+          display: grid; place-items: center;
+          font-family: var(--font-display);
+          font-weight: 600;
+          font-size: 1.9rem;
+          letter-spacing: -0.03em;
+          color: var(--ink);
+        }
+        .dq-gauge--compact .dq-gauge__num { font-size: 1.05rem; }
+
+        .dq-gauge__bars {
+          display: flex; flex-direction: column; gap: 8px;
+        }
+        .dq-bar {
+          display: grid;
+          grid-template-columns: 78px 1fr 28px;
+          gap: 10px; align-items: center;
+        }
+        .dq-bar__label {
+          font-size: 0.78rem;
+          color: var(--ink-soft);
+        }
+        .dq-bar__track {
+          height: 6px;
+          border-radius: 999px;
+          background: var(--surface-2);
+          border: 1px solid var(--line-soft);
+          overflow: hidden;
+        }
+        .dq-bar__fill {
+          height: 100%;
+          border-radius: 999px;
+          background: linear-gradient(90deg, oklch(0.66 0.155 38), oklch(0.80 0.13 80));
+          transition: width 500ms var(--ease);
+        }
+        .dq-bar__value {
+          font-family: var(--font-mono);
+          font-size: 0.78rem;
+          color: var(--ink);
+          text-align: right;
+        }
+
+        .dq-gauge__rationale {
+          font-size: 0.82rem;
+          color: var(--ink-mute);
+          font-style: italic;
+          margin: 0;
+          line-height: 1.4;
+        }
+      `}</style>
     </div>
   );
 }
