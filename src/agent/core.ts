@@ -14,6 +14,30 @@ const MAX_TOOL_ROUNDS = 5;
 
 type GroqMessage = Groq.Chat.Completions.ChatCompletionMessageParam;
 
+interface SalvagedToolCall {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
+function salvageToolCallsFromError(err: unknown): SalvagedToolCall[] {
+  const text =
+    typeof err === "object" && err !== null && "message" in err
+      ? String((err as { message: unknown }).message ?? "")
+      : String(err);
+  if (!text.includes("tool_use_failed") && !text.includes("<function=")) return [];
+  const match = text.match(/<function=([a-z_]+)(\{[\s\S]*?\})<\/?function>?/);
+  if (!match) return [];
+  const [, name, args] = match;
+  return [
+    {
+      id: `salvaged_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+      name,
+      arguments: args,
+    },
+  ];
+}
+
 function toApiMessages(history: ChatMessage[]): GroqMessage[] {
   return history
     .filter((m) => m.role === "user" || m.role === "assistant")
@@ -80,30 +104,22 @@ export async function runAgentTurn(input: RunAgentInput): Promise<RunAgentOutput
   let finalText = "";
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-    const res = await client.chat.completions.create({
-      model: AGENT_MODEL,
-      max_tokens: 800,
-      temperature: 0.6,
-      tools: TOOLS,
-      tool_choice: "auto",
-      messages: apiMessages,
-    });
+    let salvaged: SalvagedToolCall[] = [];
+    let msg: Groq.Chat.Completions.ChatCompletionMessage | undefined;
 
-    const choice = res.choices[0];
-    if (!choice) break;
-    const msg = choice.message;
-
-    apiMessages.push({
-      role: "assistant",
-      content: msg.content ?? "",
-      tool_calls: msg.tool_calls,
-    });
-
-    const toolCalls = msg.tool_calls ?? [];
-
-    if (toolCalls.length === 0) {
-      finalText = (msg.content ?? "").trim();
-      break;
+    try {
+      const res = await client.chat.completions.create({
+        model: AGENT_MODEL,
+        max_tokens: 800,
+        temperature: 0.3,
+        tools: TOOLS,
+        tool_choice: "auto",
+        messages: apiMessages,
+      });
+      msg = res.choices[0]?.message;
+    } catch (err) {
+      salvaged = salvageToolCallsFromError(err);
+      if (salvaged.length === 0) throw err;
     }
 
     const recentTranscript = lead.transcript
@@ -111,26 +127,70 @@ export async function runAgentTurn(input: RunAgentInput): Promise<RunAgentOutput
       .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
       .join("\n");
 
-    for (const tc of toolCalls) {
-      if (tc.type !== "function") continue;
-      const name = tc.function.name;
-      let parsedArgs: unknown = {};
-      try {
-        parsedArgs = JSON.parse(tc.function.arguments || "{}");
-      } catch {
-        parsedArgs = {};
-      }
-      const result = await runTool(name, parsedArgs, { lead, recentTranscript });
-      toolCallRecords.push({ name, input: parsedArgs, output: result.output });
-      if (result.mutate) lead = result.mutate(lead);
-      if (result.debate) debateTrace = result.debate;
-      if (result.forcedReply) forcedReply = result.forcedReply;
-
+    if (msg) {
       apiMessages.push({
-        role: "tool",
-        tool_call_id: tc.id,
-        content: JSON.stringify(result.output).slice(0, 4000),
+        role: "assistant",
+        content: msg.content ?? "",
+        tool_calls: msg.tool_calls,
       });
+
+      const toolCalls = msg.tool_calls ?? [];
+      if (toolCalls.length === 0) {
+        finalText = (msg.content ?? "").trim();
+        break;
+      }
+
+      for (const tc of toolCalls) {
+        if (tc.type !== "function") continue;
+        const name = tc.function.name;
+        let parsedArgs: unknown = {};
+        try {
+          parsedArgs = JSON.parse(tc.function.arguments || "{}");
+        } catch {
+          parsedArgs = {};
+        }
+        const result = await runTool(name, parsedArgs, { lead, recentTranscript });
+        toolCallRecords.push({ name, input: parsedArgs, output: result.output });
+        if (result.mutate) lead = result.mutate(lead);
+        if (result.debate) debateTrace = result.debate;
+        if (result.forcedReply) forcedReply = result.forcedReply;
+
+        apiMessages.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(result.output).slice(0, 4000),
+        });
+      }
+    } else {
+      apiMessages.push({
+        role: "assistant",
+        content: "",
+        tool_calls: salvaged.map((s) => ({
+          id: s.id,
+          type: "function",
+          function: { name: s.name, arguments: s.arguments },
+        })),
+      });
+
+      for (const s of salvaged) {
+        let parsedArgs: unknown = {};
+        try {
+          parsedArgs = JSON.parse(s.arguments || "{}");
+        } catch {
+          parsedArgs = {};
+        }
+        const result = await runTool(s.name, parsedArgs, { lead, recentTranscript });
+        toolCallRecords.push({ name: s.name, input: parsedArgs, output: result.output });
+        if (result.mutate) lead = result.mutate(lead);
+        if (result.debate) debateTrace = result.debate;
+        if (result.forcedReply) forcedReply = result.forcedReply;
+
+        apiMessages.push({
+          role: "tool",
+          tool_call_id: s.id,
+          content: JSON.stringify(result.output).slice(0, 4000),
+        });
+      }
     }
   }
 

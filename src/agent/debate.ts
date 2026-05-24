@@ -14,6 +14,18 @@ interface DebateOutput {
   reply: string;
 }
 
+function stripWrappingQuotes(text: string): string {
+  let t = text.trim();
+  while (
+    (t.startsWith('"') && t.endsWith('"')) ||
+    (t.startsWith("'") && t.endsWith("'")) ||
+    (t.startsWith("“") && t.endsWith("”"))
+  ) {
+    t = t.slice(1, -1).trim();
+  }
+  return t;
+}
+
 async function singleShot(client: Groq, system: string, user: string): Promise<string> {
   const res = await client.chat.completions.create({
     model: DEBATE_MODEL,
@@ -24,7 +36,7 @@ async function singleShot(client: Groq, system: string, user: string): Promise<s
       { role: "user", content: user },
     ],
   });
-  return (res.choices[0]?.message?.content ?? "").trim();
+  return stripWrappingQuotes(res.choices[0]?.message?.content ?? "");
 }
 
 export async function runObjectionDebate(input: DebateInput): Promise<DebateOutput> {

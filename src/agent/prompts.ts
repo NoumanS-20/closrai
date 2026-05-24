@@ -57,7 +57,7 @@ Constraints:
 - Never sound defensive.
 - End with one focused question that moves the conversation forward.
 
-Return ONLY the message text. No preamble.`;
+OUTPUT FORMAT: Return ONLY the message text the visitor will see. No preamble. No quotation marks wrapping the message. No "Here is the message:". Just the words you would actually send.`;
 
 export const FOLLOW_UP_EMAIL_PROMPT = `You are drafting a follow-up email from the founder of Lumen Analytics to a lead ClosrAI just spoke with. Use the conversation transcript and lead data to write a personalized 4–6 sentence email.
 
