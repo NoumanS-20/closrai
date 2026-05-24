@@ -1,32 +1,58 @@
-# ClosrAI — the AI sales rep that argues with itself
+# ClosrAI Platform — one agent core, three bots that argue with themselves
 
-> **FlowZint AI Hackathon 2026 · Sales Bot track**
-> *Automate sales conversations & boost conversions.*
+> **FlowZint AI Hackathon 2026 · Open Innovation**
+> Covers 3 of 4 hackathon tracks: **Sales Bot · Support Chat Bot · Customer Care Bot** — all on one shared agent runtime.
 
-ClosrAI is an AI Sales Development Representative for B2B SaaS. It lives on a pricing page, qualifies anonymous visitors in real time, **runs an internal Skeptic-vs-Closer debate** before responding to every objection, and books meetings — all while a transparent **Deal IQ** score streams live to the founder's dashboard.
+ClosrAI is a multi-track AI bot platform. Three personas (Sales SDR, Support Agent, Customer Care) share the same `runAgentTurn()`, the same Skeptic-vs-Closer multi-agent debate, the same transparent IQ scorer, and the same founder dashboard. Only the system prompt, the scorer dimensions, and the tool palette change per persona.
 
-The fictional product behind the demo is *Lumen Analytics*, a churn-prediction SaaS. ClosrAI is the SDR working its homepage.
-
----
-
-## Why this is different from another GPT-wrapper chatbot
-
-Three things judges have never seen in one Sales Bot:
-
-| # | Mechanism | Why it matters |
-|---|-----------|----------------|
-| 1 | **Live Deal IQ scoring** — a 7-dimensional BANT + intent + sentiment + ICP-fit score that updates *per message* with a one-line rationale | Founders get a transparent number, not a black box. Visible in real time on the dashboard. |
-| 2 | **Skeptic-vs-Closer multi-agent debate** on every objection | The internal Skeptic surfaces the *real* underlying concern beneath the stated objection. The Closer crafts the reframe. A Resolver synthesizes the final message. The debate is logged in the transcript — explainable AI for sales. |
-| 3 | **Real tool-using agent** — not a glorified RAG bot | ClosrAI calls 5 live tools: enriches the company from its public website, books a meeting on a calendar, writes a CRM row, drafts a personalized founder follow-up email. |
+It also ships with **browser-native voice mode** (Web Speech API — talk to the bot, hear it talk back) and a **one-line `<script>` embed** that drops the appropriate bot into any third-party website.
 
 ---
 
 ## Live demo
 
-- **Visitor view:** `/chat` — talk to ClosrAI as a prospect.
-- **Founder console:** `/dashboard` — see every lead, transcript, debate trace, and auto-drafted email.
+- **Landing & overview:** [`/`](https://closrai-nine.vercel.app/)
+- **Bot picker:** [`/chat`](https://closrai-nine.vercel.app/chat)
+  - Sales SDR: [`/chat/sales`](https://closrai-nine.vercel.app/chat/sales)
+  - Support Agent: [`/chat/support`](https://closrai-nine.vercel.app/chat/support)
+  - Customer Care: [`/chat/care`](https://closrai-nine.vercel.app/chat/care)
+- **Unified founder dashboard:** [`/dashboard`](https://closrai-nine.vercel.app/dashboard) (filter by persona)
+- **Third-party embed demo:** [`/embed-demo`](https://closrai-nine.vercel.app/embed-demo) (fake customer site with the launcher in the corner)
 
-A guided 90-second demo script is in [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md).
+---
+
+## What's novel — for the 30% Model Innovation score
+
+Four mechanisms judges have never seen in **one** Sales+Support+Care submission:
+
+| # | Mechanism | Why it matters |
+|---|-----------|----------------|
+| 1 | **One agent core, three bots** | Same `runAgentTurn()` powers Sales, Support, and Care. Switch personas, get a different system prompt, scorer, tool palette, accent color, IQ threshold. Architectural reuse, not three separate apps. |
+| 2 | **Skeptic-vs-Closer multi-agent debate** | When a person pushes back (price, refund refusal, policy), two internal agents argue. Skeptic finds the *real* concern beneath the surface; Closer crafts the reframe; Resolver synthesizes. **All three personas use it.** |
+| 3 | **Persona-specific IQ scoring** | 7 dimensions, scored per message by Llama 3.1 8B. Sales gets Deal IQ (BANT + ICP fit). Support gets Resolution IQ (KB coverage + escalation risk). Care gets Care IQ (satisfaction + loyalty risk). Streams to the dashboard live. |
+| 4 | **Voice + Embed for free** | Browser-native Web Speech API (STT + TTS) — no extra API key, no extra dep. One-line `<script>` embed lets any site drop a configured persona in 30 seconds. |
+
+---
+
+## Try it locally
+
+```bash
+git clone https://github.com/NoumanS-20/closrai.git
+cd closrai
+npm install
+cp .env.local.example .env.local
+# Add your free Groq API key from https://console.groq.com/keys
+npm run seed   # populates 4 demo leads across all 3 personas
+npm run dev
+```
+
+Then open:
+- http://localhost:3000 — landing
+- http://localhost:3000/chat — bot picker
+- http://localhost:3000/dashboard — founder view
+- http://localhost:3000/embed-demo — embed demo (fake customer site)
+
+The app runs **without an API key** in stub mode (heuristic scoring per persona, scripted replies) — useful for reviewers who don't want to plug in a key.
 
 ---
 
@@ -34,74 +60,78 @@ A guided 90-second demo script is in [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md
 
 ```
 Next.js 16 App Router (Vercel-deployable, all-in-one)
-  ├── /                       Marketing landing
-  ├── /chat                   Visitor-facing widget + Live Deal IQ gauge
-  ├── /dashboard              Founder console (lead list + stats)
-  ├── /dashboard/[id]         Lead detail (transcript, debate, email draft)
-  ├── /api/chat               Agent endpoint (POST)
-  └── /api/leads              CRM read (GET) + /[id]
+  ├── /                          Marketing landing
+  ├── /chat                      Bot picker (links to 3 personas)
+  │   ├── /chat/sales           Sales SDR widget (emerald)
+  │   ├── /chat/support         Support Agent widget (sky)
+  │   └── /chat/care            Customer Care widget (violet)
+  ├── /embed                     Sidebar-less widget for iframes
+  ├── /embed-demo                Fake customer site demonstrating <script> embed
+  ├── /dashboard                 Founder console (filter by persona)
+  ├── /dashboard/[id]            Per-lead detail (transcript + debate + order + escalation)
+  ├── /api/chat                  Agent endpoint (POST)
+  ├── /api/leads                 CRM read (GET) + /[id]
+  └── /embed.js                  Public script that any site can <script src=...>
 
 Agent runtime (src/agent/)
-  └── runAgentTurn()
-        ├── scoreDealIQ()          ── Llama 3.1 8B (Groq) · structured JSON scorer
-        ├── Groq tool-use loop     ── Llama 3.3 70B · 5 tools, ≤5 rounds
-        │     ├── enrich_company         · Live HTTP fetch + heuristic tagging
-        │     ├── handle_objection       · → debate sub-system
-        │     │     ├── Skeptic           ── Llama 3.1 8B
-        │     │     ├── Closer            ── Llama 3.1 8B
-        │     │     └── Resolver          ── Llama 3.1 8B
-        │     ├── book_meeting           · Mock calendar with confirmation code
-        │     ├── save_lead              · JSON-file CRM (zero-deps demo store)
-        │     └── draft_follow_up_email  · Llama 3.3 70B · personalized
-        └── upsertLead()            ── data/leads.json
+  └── runAgentTurn(lead)
+        ├── personas.ts            3 persona definitions (system prompt, scorer prompt, tool gate, IQ threshold)
+        ├── scoreDealIQ            persona.scorerPrompt → Llama 3.1 8B (JSON output)
+        ├── Groq tool-use loop     persona.systemPrompt + persona.enabledTools, ≤5 rounds
+        │     ├── enrich_company         (Sales)         — live web fetch + heuristic tagging
+        │     ├── search_kb              (Support)       — in-memory KB w/ tag+token scoring
+        │     ├── lookup_order           (Care)          — mock order DB, 2 fixtures
+        │     ├── refund_request         (Care)          — 14-day return-window logic
+        │     ├── escalate_to_human      (Support, Care) — produces ticket ID with priority
+        │     ├── handle_objection       (All 3)         — Skeptic + Closer + Resolver debate
+        │     ├── book_meeting           (Sales)         — mock calendar with confirmation code
+        │     ├── save_lead              (All 3)         — persists to backend
+        │     └── draft_follow_up_email  (Sales)         — Llama 3.3 70B
+        └── store.upsertLead       3-tier backend: Upstash Redis / file / in-memory (auto-picked)
 ```
 
-### Why this design
+### Why these choices
 
-- **Prompt caching** (`cache_control: { type: "ephemeral" }`) on the long SDR system prompt — keeps token cost low and latency tight on multi-turn calls.
-- **Model split** — Llama 3.3 70B (Groq) for the SDR brain and email drafting (quality matters); Llama 3.1 8B Instant for scoring, debate roles, and resolution (latency matters, 4 calls per debate). Groq's free tier delivers 280–560 tok/s on these models, which makes the multi-agent debate feel sub-second instead of laggy.
-- **Tool-use as the spine, not RAG** — every "action" the agent takes is a real, observable tool call. No vector DB needed for this product surface, so we don't add one.
-- **JSON file store** — leads persist locally for the demo; swappable for Postgres in one file. Deliberate scope choice for a 3-day solo build.
-- **Heuristic fallback everywhere** — Deal IQ, debate, and email drafting all degrade gracefully when `GROQ_API_KEY` is absent, so judges can clone and run with zero secrets and still see the UX.
+- **Persona as data, not subclasses.** Adding a fourth persona is a single new entry in `personas.ts` — no agent core changes, no new route handler, no new components. The platform is the point.
+- **Llama 3.3 70B + 3.1 8B split.** 70B on the SDR brain and email drafting (quality). 8B on the scorer and three debate roles (latency, cost — four 8B calls per debate). Groq inference (~280 tok/s on 70B, ~560 on 8B) makes the multi-agent debate sub-second.
+- **Tool-use as the spine, not RAG.** Every visible action is a real, observable tool call. No vector DB. The Support persona's "knowledge base" is a small in-memory tagged corpus with deterministic scoring — fast, debuggable, and enough for the demo.
+- **Salvage path for Llama-on-Groq tool-call quirks.** Llama occasionally emits raw `<function=...>` text instead of structured `tool_calls`. The core loop catches the `tool_use_failed` 400, parses the raw text, and continues the loop manually.
+- **Zero-config persistence with three backends.** Local: `data/leads.json`. Vercel + Upstash env vars: Redis. Vercel without KV: in-memory map. Single import, automatic.
+- **Voice via browser, not via API.** Web Speech API gives free STT + TTS with no extra cost or rate limit. en-IN locale by default.
 
 ---
 
-## Quick start
+## Embedding ClosrAI on another site
 
-```bash
-git clone <this-repo>
-cd closrai
-npm install
-cp .env.local.example .env.local
-# add your GROQ_API_KEY to .env.local
-npm run dev
+```html
+<!-- Anywhere in your site's HTML -->
+<script
+  src="https://closrai-nine.vercel.app/embed.js"
+  data-persona="care"
+  data-voice="1"
+  defer
+></script>
 ```
 
-Then open:
-- http://localhost:3000 — landing
-- http://localhost:3000/chat — talk to ClosrAI
-- http://localhost:3000/dashboard — founder view
+- `data-persona` — `sales` | `support` | `care` (default `sales`)
+- `data-voice` — `1` to enable voice mode in the embedded widget, `0` to disable
+- The script injects a themed floating launcher; clicking it opens an iframe to `/embed?persona=…`.
 
-The app runs **without an API key** in stub mode (heuristic scoring, scripted replies) — useful for reviewers who don't want to plug in a key.
-
-### Production build
-
-```bash
-npm run build
-npm start
-```
+See `/embed-demo` for a fake third-party site demonstrating this.
 
 ---
 
 ## Tech stack
 
 - **Next.js 16** (App Router, Turbopack)
-- **React 19**
-- **TypeScript** (strict)
+- **React 19** with strict React 19 lint rules (`set-state-in-effect`, `react-hooks/purity`)
+- **TypeScript strict**
 - **Tailwind CSS 4**
-- **Groq SDK** (`groq-sdk` v1.2) — Llama 3.3 70B Versatile + Llama 3.1 8B Instant (free tier, ~280–560 tok/s)
-- **zod** for request validation
-- **No database** — JSON file persistence (`data/leads.json`)
+- **Groq SDK** (`groq-sdk` v1.2) — Llama 3.3 70B Versatile + Llama 3.1 8B Instant (free tier)
+- **Zod** for request validation (Zod 4 `treeifyError`)
+- **Upstash Redis** as optional persistence layer; falls back to file or memory automatically
+- **Web Speech API** for browser-native voice (no external STT/TTS service)
+- **No vector DB**, no database server, no extra LLM provider
 
 ---
 
@@ -110,40 +140,54 @@ npm start
 ```
 src/
   agent/
-    core.ts        Agent orchestrator: scoring + tool-use loop
+    core.ts        Agent orchestrator: persona resolution + scoring + tool-use loop + salvage path
+    personas.ts    3 persona definitions
     client.ts      Groq SDK singleton + model IDs
-    tools.ts       Tool definitions and handlers
+    prompts.ts     Shared prompts (debate, follow-up email)
+    tools.ts       9 tool definitions and handlers + persona gating
     debate.ts      Skeptic / Closer / Resolver sub-system
-    dealiq.ts      7-dimensional lead scoring
-    prompts.ts     All system prompts (one source of truth)
+    dealiq.ts      Per-persona scorer (LLM + heuristic fallback)
   app/
     page.tsx                  Marketing landing
-    layout.tsx                Root layout
-    chat/page.tsx             Visitor chat
-    dashboard/page.tsx        Lead list + stats
+    chat/page.tsx             Bot picker
+    chat/sales/page.tsx       Sales widget
+    chat/support/page.tsx     Support widget
+    chat/care/page.tsx        Care widget
+    embed/page.tsx            Sidebar-less widget for iframes
+    embed-demo/page.tsx       Fake customer site
+    dashboard/page.tsx        Lead list + persona filter
     dashboard/[id]/page.tsx   Lead detail
     api/chat/route.ts         POST /api/chat
-    api/leads/route.ts        GET  /api/leads
-    api/leads/[id]/route.ts   GET  /api/leads/[id]
+    api/leads/route.ts        GET /api/leads
+    api/leads/[id]/route.ts   GET /api/leads/[id]
   components/
-    ChatWidget.tsx     Stateful chat UI
+    ChatWidget.tsx     Stateful chat UI (persona-aware, voice-capable)
+    VoiceButton.tsx    Web Speech STT + TTS toggle
     DealIQGauge.tsx    Animated score ring + breakdown bars
     DebatePanel.tsx    Inline objection-debate display
   lib/
     types.ts           Shared TS types
-    store.ts           JSON-file CRM
+    store.ts           3-tier backend lead store
+public/
+  embed.js             One-line embed script
+scripts/
+  seed-demo.ts         Populates 4 demo leads (Sales + Support + Care)
+docs/
+  ARCHITECTURE.md      Mermaid diagrams + per-turn sequence
+  DEMO_SCRIPT.md       90-second demo storyboard
+  SUBMISSION.md        Submission form cheat-sheet
 ```
 
 ---
 
 ## Judging-criteria alignment
 
-| Criterion (weight) | How ClosrAI delivers |
+| Criterion (weight) | How ClosrAI Platform delivers |
 |---|---|
-| **Model Innovation & Novelty (30%)** | Multi-agent Skeptic-vs-Closer debate routed via Groq tool-use; transparent live Deal IQ score with explainability; model split (Llama 3.3 70B for closing, Llama 3.1 8B for fast debate loops). |
-| **Real-World Applicability (25%)** | Solves a concrete B2B SaaS founder pain (anonymous-visitor → qualified-meeting). Every action is a real tool call: enrichment, calendar, CRM, follow-up email. |
-| **Technical Architecture (25%)** | Clean module boundaries (agent / lib / components / app), prompt caching, graceful no-key fallback, strict TypeScript, zod-validated API, ≤5-round tool loop guard. |
-| **Documentation Clarity (20%)** | This README, demo script, inline file comments, architecture ASCII diagram, README-driven file map. |
+| **Model Innovation & Novelty (30%)** | Multi-persona agent platform with shared Skeptic-vs-Closer debate, per-persona transparent IQ scoring, browser-native voice, one-line embed. Covers 3 of 4 hackathon tracks on one runtime. |
+| **Real-World Applicability (25%)** | Solves three concrete real-world problems: B2B SaaS lead qualification, technical support deflection, D2C post-purchase care. Embed.js makes it deployable on any site in one line. |
+| **Technical Architecture (25%)** | Clean separation: personas as data, shared runtime, gated tool palette, 3-tier auto-falling-back store, salvage path for Groq quirks, strict TypeScript, zod-validated API, React 19 strict lint rules. |
+| **Documentation Clarity (20%)** | This README, dedicated architecture doc with Mermaid diagrams, 90-second demo script, submission cheat-sheet, inline file map, ASCII architecture diagram on landing page. |
 
 ---
 

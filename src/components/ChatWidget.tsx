@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ChatMessage, Lead, PersonaId } from "@/lib/types";
 import { DealIQGauge } from "./DealIQGauge";
 import { DebatePanel } from "./DebatePanel";
+import { VoiceButton } from "./VoiceButton";
 
 interface PersonaUiConfig {
   id: PersonaId;
@@ -77,6 +78,7 @@ interface Props {
   showSidebar?: boolean;
   showDebate?: boolean;
   embed?: boolean;
+  voiceEnabled?: boolean;
 }
 
 export function ChatWidget({
@@ -84,6 +86,7 @@ export function ChatWidget({
   showSidebar = true,
   showDebate = true,
   embed = false,
+  voiceEnabled = true,
 }: Props) {
   const ui = PERSONA_UI[personaId];
   const accent = ACCENT_CLASSES[ui.accent];
@@ -225,7 +228,22 @@ export function ChatWidget({
         </div>
 
         <div className="border-t border-zinc-800 p-3">
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            {voiceEnabled && (
+              <VoiceButton
+                accent={ui.accent}
+                disabled={busy}
+                onTranscript={(text) => {
+                  setInput("");
+                  send(text);
+                }}
+                speakingText={
+                  messages.length > 0 && messages[messages.length - 1].role === "assistant"
+                    ? messages[messages.length - 1].content
+                    : undefined
+                }
+              />
+            )}
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -235,7 +253,7 @@ export function ChatWidget({
                   send();
                 }
               }}
-              placeholder="Type your message…"
+              placeholder="Type or tap the mic…"
               disabled={busy}
               className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-600"
             />
