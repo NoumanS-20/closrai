@@ -65,7 +65,7 @@ export function ChatWidget({ showDealIq = true, showDebate = true }: Props) {
           role: "assistant",
           ts: Date.now(),
           content:
-            "Sorry — something hiccuped on my side. Mind trying that again? (Check that ANTHROPIC_API_KEY is set if you're running locally.)",
+            "Sorry — something hiccuped on my side. Mind trying that again? (Check that GROQ_API_KEY is set if you're running locally.)",
         },
       ]);
       console.error(err);

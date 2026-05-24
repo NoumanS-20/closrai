@@ -7,7 +7,7 @@ The video should be ~90 seconds. Shoot in 1080p, screen capture only (no webcam 
 ## Setup before recording
 
 1. `npm run dev` and confirm http://localhost:3000 loads.
-2. Make sure `ANTHROPIC_API_KEY` is in `.env.local`.
+2. Make sure `GROQ_API_KEY` is in `.env.local`.
 3. Delete `data/leads.json` so the dashboard starts empty.
 4. Open three tabs in the same browser window:
    - Tab 1: http://localhost:3000  (landing)

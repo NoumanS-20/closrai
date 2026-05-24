@@ -83,7 +83,7 @@ sequenceDiagram
 
 - **Tool-use as the spine.** Every visible action (enrich, book, save, email) is a real, observable tool call. This makes the agent's behavior auditable — judges can see exactly what it did, not just what it said.
 - **Skeptic-vs-Closer routed through `handle_objection`.** The main SDR prompt instructs the agent to *route* objections, not improvise responses. This forces the debate code path on every objection, making the novelty mechanism reliable in demo.
-- **Model split.** Opus 4.7 only on two surfaces (main SDR + email draft) where quality matters. Haiku 4.5 for the 4 latency-sensitive calls per debate (and the scorer). Roughly 70% latency reduction vs all-Opus, with no quality loss on the debate roles in practice.
+- **Model split.** Llama 3.3 70B Versatile on two surfaces (main SDR + email draft) where quality matters. Llama 3.1 8B Instant for the 4 latency-sensitive calls per debate (and the scorer). Groq's inference speed (280 tok/s on 70B, 560 tok/s on 8B) makes the multi-agent debate feel sub-second instead of laggy.
 - **Prompt caching** on the long SDR system prompt (`cache_control: ephemeral`). Saves tokens across multi-turn conversations.
 - **Zero-config persistence.** Local: JSON file. Vercel + Upstash env vars: Redis. Vercel without KV: in-memory (per-instance, fine for demo). Single import, three backends, picked at first call.
 - **No vector DB.** This product surface doesn't need RAG. Adding Pinecone/Chroma would inflate complexity without scoring more points on any of the 4 judging dimensions. Deliberate scope choice.
@@ -95,7 +95,7 @@ sequenceDiagram
 | File | Responsibility |
 |---|---|
 | `src/agent/core.ts` | Orchestrator: scores the turn, runs the tool-use loop, updates lead state |
-| `src/agent/client.ts` | Anthropic SDK singleton + model ID constants |
+| `src/agent/client.ts` | Groq SDK singleton + model ID constants |
 | `src/agent/prompts.ts` | Every system prompt in one file (single source of truth) |
 | `src/agent/tools.ts` | 5 tool definitions + handlers |
 | `src/agent/debate.ts` | Skeptic / Closer / Resolver sub-system |

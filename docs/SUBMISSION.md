@@ -24,10 +24,11 @@ things no other sales bot does: it streams a transparent 7-dimensional Deal IQ
 score to the founder dashboard as the conversation unfolds, it runs an internal
 Skeptic-vs-Closer multi-agent debate before responding to any objection, and it
 acts through five real tools — live company enrichment, mock calendar booking,
-JSON CRM persistence, and an Opus-drafted personalized founder follow-up email.
-Built on Next.js 16 with Claude Opus 4.7 (closing) and Haiku 4.5 (scoring +
-debate), the system is deployable in one click and degrades gracefully without
-an API key so judges can clone and explore the UX immediately.
+JSON CRM persistence, and a Llama-drafted personalized founder follow-up email.
+Built on Next.js 16 with Llama 3.3 70B (closing + email) and Llama 3.1 8B
+Instant (scoring + debate) served by Groq's free tier at ~280–560 tokens/sec,
+the system is deployable in one click and degrades gracefully without an API
+key so judges can clone and explore the UX immediately.
 ```
 
 ## Required links
@@ -43,7 +44,7 @@ an API key so judges can clone and explore the UX immediately.
 - [ ] GitHub repo is **public** (not private — auto-rejects on private).
 - [ ] Demo video link plays in an incognito window without auth.
 - [ ] Live Vercel URL is reachable and `/chat` actually responds.
-- [ ] `ANTHROPIC_API_KEY` env var is set in Vercel project settings.
+- [ ] `GROQ_API_KEY` env var is set in Vercel project settings.
 - [ ] README.md is the first thing visible on the GitHub repo.
 - [ ] Project description in the form is ≥50 words and is **not** gibberish.
 - [ ] All form fields filled — team leader, email, phone, college/org.

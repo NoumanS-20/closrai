@@ -66,7 +66,7 @@ export default function Home() {
           </div>
           <div className="flex flex-wrap gap-4 text-xs text-zinc-500 pt-2">
             <span>✓ No signup needed</span>
-            <span>✓ Real Claude tool-use</span>
+            <span>✓ Real Groq tool-use</span>
             <span>✓ Live transparent scoring</span>
           </div>
         </div>
@@ -183,7 +183,7 @@ export default function Home() {
                 The widget greets them and starts qualifying with one focused
                 question at a time.
               </Step>
-              <Step n={2} title="Claude tool-use loop runs">
+              <Step n={2} title="Groq tool-use loop runs">
                 The agent calls{" "}
                 <code className="text-emerald-300">enrich_company</code> on the
                 visitor&rsquo;s domain, then chains{" "}
@@ -210,16 +210,16 @@ export default function Home() {
   └── /dashboard             Founder console
   └── /api/chat              Agent endpoint
         └── runAgentTurn()
-              ├── scoreDealIQ()         Haiku · BANT+ICP scorer
-              ├── Claude tool-use loop  Opus · 5 tools, ≤5 rounds
+              ├── scoreDealIQ()         Llama 3.1 8B · BANT+ICP scorer
+              ├── Groq tool-use loop    Llama 3.3 70B · 5 tools, ≤5 rounds
               │     ├── enrich_company        Live web fetch
               │     ├── handle_objection      → debate
-              │     │     ├── Skeptic         Haiku
-              │     │     ├── Closer          Haiku
-              │     │     └── Resolver        Haiku
+              │     │     ├── Skeptic         Llama 3.1 8B
+              │     │     ├── Closer          Llama 3.1 8B
+              │     │     └── Resolver        Llama 3.1 8B
               │     ├── book_meeting          Mock calendar
               │     ├── save_lead             JSON CRM
-              │     └── draft_follow_up_email Opus
+              │     └── draft_follow_up_email Llama 3.3 70B
               └── upsertLead()          JSON store`}</pre>
           </div>
         </div>
