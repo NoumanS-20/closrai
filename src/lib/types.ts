@@ -1,5 +1,7 @@
 export type Role = "user" | "assistant" | "system";
 
+export type PersonaId = "sales" | "support" | "care";
+
 export interface ChatMessage {
   id: string;
   role: Role;
@@ -35,21 +37,60 @@ export interface ToolCallRecord {
   output: unknown;
 }
 
+export type LeadStatus =
+  | "new"
+  | "qualified"
+  | "meeting_booked"
+  | "disqualified"
+  | "resolved"
+  | "escalated";
+
 export interface Lead {
   id: string;
+  personaId: PersonaId;
   createdAt: number;
   updatedAt: number;
   name?: string;
   email?: string;
+  phone?: string;
   company?: string;
   role?: string;
   companyWebsite?: string;
   enrichment?: CompanyEnrichment;
   dealIq?: DealIQ;
-  status: "new" | "qualified" | "meeting_booked" | "disqualified";
+  status: LeadStatus;
   meeting?: BookedMeeting;
   followUpEmail?: string;
+  escalation?: EscalationTicket;
+  resolvedSummary?: string;
+  orderLookup?: OrderRecord;
   transcript: ChatMessage[];
+}
+
+export interface EscalationTicket {
+  ticketId: string;
+  priority: "low" | "normal" | "high";
+  reason: string;
+  createdAtIso: string;
+}
+
+export interface OrderRecord {
+  orderId: string;
+  status:
+    | "placed"
+    | "packed"
+    | "shipped"
+    | "out_for_delivery"
+    | "delivered"
+    | "returned"
+    | "refunded"
+    | "cancelled";
+  items: Array<{ name: string; qty: number; priceInr: number }>;
+  totalInr: number;
+  placedIso: string;
+  expectedDeliveryIso?: string;
+  trackingUrl?: string;
+  shippingPincode?: string;
 }
 
 export interface CompanyEnrichment {
