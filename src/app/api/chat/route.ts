@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { runAgentTurn } from "@/agent/core";
 import { emptyLead, getLead, upsertLead } from "@/lib/store";
+import type { PersonaId } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BodySchema = z.object({
   leadId: z.string().optional(),
+  personaId: z.enum(["sales", "support", "care"]).optional(),
   message: z.string().min(1).max(4000),
 });
 
@@ -27,9 +29,10 @@ export async function POST(req: Request) {
     );
   }
 
-  const { leadId, message } = parsed.data;
-  const lead =
-    (leadId ? await getLead(leadId) : undefined) ?? emptyLead();
+  const { leadId, message, personaId } = parsed.data;
+  const requestedPersona: PersonaId = personaId ?? "sales";
+  const existing = leadId ? await getLead(leadId) : undefined;
+  const lead = existing ?? emptyLead(requestedPersona);
 
   try {
     const { lead: nextLead, assistantMessage } = await runAgentTurn({

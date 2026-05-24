@@ -6,9 +6,9 @@ import type {
   ToolCallRecord,
 } from "@/lib/types";
 import { AGENT_MODEL, getGroq } from "./client";
-import { SDR_SYSTEM_PROMPT } from "./prompts";
-import { TOOLS, runTool } from "./tools";
+import { getToolsForPersona, runTool } from "./tools";
 import { scoreDealIQ } from "./dealiq";
+import { type PersonaDefinition, getPersona } from "./personas";
 
 const MAX_TOOL_ROUNDS = 5;
 
@@ -63,6 +63,8 @@ export interface RunAgentOutput {
 
 export async function runAgentTurn(input: RunAgentInput): Promise<RunAgentOutput> {
   const client = getGroq();
+  const persona: PersonaDefinition = getPersona(input.lead.personaId);
+  const tools = getToolsForPersona(persona);
 
   const userMsg: ChatMessage = {
     id: newMessageId(),
@@ -76,11 +78,11 @@ export async function runAgentTurn(input: RunAgentInput): Promise<RunAgentOutput
     transcript: [...input.lead.transcript, userMsg],
   };
 
-  const dealIq = await scoreDealIQ(lead.transcript, input.userMessage, lead.dealIq);
+  const dealIq = await scoreDealIQ(persona, lead.transcript, input.userMessage, lead.dealIq);
   lead = { ...lead, dealIq };
 
   if (!client) {
-    const fallback = stubReply(input.userMessage, lead);
+    const fallback = stubReply(persona, input.userMessage, lead);
     const asst: ChatMessage = {
       id: newMessageId(),
       role: "assistant",
@@ -97,7 +99,7 @@ export async function runAgentTurn(input: RunAgentInput): Promise<RunAgentOutput
   let forcedReply: string | undefined;
 
   const apiMessages: GroqMessage[] = [
-    { role: "system", content: SDR_SYSTEM_PROMPT },
+    { role: "system", content: persona.systemPrompt },
     ...toApiMessages(lead.transcript),
   ];
 
@@ -112,7 +114,7 @@ export async function runAgentTurn(input: RunAgentInput): Promise<RunAgentOutput
         model: AGENT_MODEL,
         max_tokens: 800,
         temperature: 0.3,
-        tools: TOOLS,
+        tools,
         tool_choice: "auto",
         messages: apiMessages,
       });
@@ -149,7 +151,7 @@ export async function runAgentTurn(input: RunAgentInput): Promise<RunAgentOutput
         } catch {
           parsedArgs = {};
         }
-        const result = await runTool(name, parsedArgs, { lead, recentTranscript });
+        const result = await runTool(name, parsedArgs, { lead, recentTranscript, persona });
         toolCallRecords.push({ name, input: parsedArgs, output: result.output });
         if (result.mutate) lead = result.mutate(lead);
         if (result.debate) debateTrace = result.debate;
@@ -179,7 +181,7 @@ export async function runAgentTurn(input: RunAgentInput): Promise<RunAgentOutput
         } catch {
           parsedArgs = {};
         }
-        const result = await runTool(s.name, parsedArgs, { lead, recentTranscript });
+        const result = await runTool(s.name, parsedArgs, { lead, recentTranscript, persona });
         toolCallRecords.push({ name: s.name, input: parsedArgs, output: result.output });
         if (result.mutate) lead = result.mutate(lead);
         if (result.debate) debateTrace = result.debate;
@@ -211,23 +213,23 @@ export async function runAgentTurn(input: RunAgentInput): Promise<RunAgentOutput
     transcript: [...lead.transcript, assistantMessage],
   };
 
-  if (lead.status === "new" && (dealIq.total ?? 0) >= 65) {
+  if (lead.status === "new" && (dealIq.total ?? 0) >= persona.qualifyThreshold) {
     lead = { ...lead, status: "qualified" };
   }
 
   return { lead, assistantMessage };
 }
 
-function stubReply(userMessage: string, lead: Lead): string {
+function stubReply(persona: PersonaDefinition, userMessage: string, lead: Lead): string {
   const intro =
     lead.transcript.length <= 2
-      ? "Hey! I'm ClosrAI — I help founders at Lumen Analytics figure out if we can help cut your churn. "
+      ? `Hey! I'm ${persona.brand.rep} — ${persona.brand.productOneLiner} `
       : "";
   if (/(price|cost|how much)/i.test(userMessage)) {
-    return `${intro}Pricing depends on your customer base size — most teams in our range pay between ₹40K and ₹2L/month. What's the rough size of your paying user base?`;
+    return `${intro}I'd be happy to walk you through pricing once I understand your scenario. What's your team size and biggest pain point right now?`;
   }
   if (/(demo|trial|book|meeting)/i.test(userMessage)) {
-    return `${intro}Happy to set that up. What email should I send the calendar invite to?`;
+    return `${intro}Happy to set that up. What email should I use for the invite?`;
   }
-  return `${intro}Tell me a bit about what brought you here — are you running into churn issues or just exploring retention tools? (Running in stub mode — add GROQ_API_KEY to .env.local for full agent.)`;
+  return `${intro}Tell me a bit about what brought you here — what are you trying to solve? (Running in stub mode — add GROQ_API_KEY to .env.local for the full agent.)`;
 }

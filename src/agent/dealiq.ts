@@ -1,6 +1,6 @@
 import type { ChatMessage, DealIQ } from "@/lib/types";
-import { DEAL_IQ_SCORER_PROMPT } from "./prompts";
 import { getGroq, SCORER_MODEL } from "./client";
+import type { PersonaDefinition } from "./personas";
 
 const EMPTY_IQ: DealIQ = {
   total: 0,
@@ -30,13 +30,14 @@ function extractJson(text: string): string {
 }
 
 export async function scoreDealIQ(
+  persona: PersonaDefinition,
   history: ChatMessage[],
   latestUserMessage: string,
   previous?: DealIQ,
 ): Promise<DealIQ> {
   const client = getGroq();
   if (!client) {
-    return heuristicScore(latestUserMessage, previous);
+    return heuristicScore(persona, latestUserMessage, previous);
   }
 
   const conversation = history
@@ -53,30 +54,76 @@ export async function scoreDealIQ(
       temperature: 0.2,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: DEAL_IQ_SCORER_PROMPT },
+        { role: "system", content: persona.scorerPrompt },
         { role: "user", content: userBlock },
       ],
     });
     const text = res.choices[0]?.message?.content ?? "";
-    const parsed = JSON.parse(extractJson(text)) as Partial<DealIQ>;
-    return {
-      budget: clamp(parsed.budget),
-      authority: clamp(parsed.authority),
-      need: clamp(parsed.need),
-      timing: clamp(parsed.timing),
-      intent: clamp(parsed.intent),
-      sentiment: clamp(parsed.sentiment ?? 50),
-      icpFit: clamp(parsed.icpFit),
-      total: clamp(parsed.total),
-      rationale:
-        typeof parsed.rationale === "string" && parsed.rationale.length > 0
-          ? parsed.rationale.slice(0, 200)
-          : "Updated score.",
-    };
+    const parsed = JSON.parse(extractJson(text)) as Record<string, unknown>;
+    return normalize(parsed);
   } catch (err) {
     console.error("[dealiq] scoring failed, falling back to heuristic", err);
-    return heuristicScore(latestUserMessage, previous);
+    return heuristicScore(persona, latestUserMessage, previous);
   }
+}
+
+function normalize(parsed: Record<string, unknown>): DealIQ {
+  return {
+    budget: clamp(parsed.budget ?? parsed.clarity ?? parsed.satisfaction),
+    authority: clamp(parsed.authority ?? parsed.specificity ?? parsed.loyaltyRisk),
+    need: clamp(parsed.need ?? parsed.kbCoverage ?? parsed.complexity),
+    timing: clamp(parsed.timing ?? parsed.urgency),
+    intent: clamp(parsed.intent ?? parsed.resolutionLikelihood ?? parsed.repeatIssue),
+    sentiment: clamp(parsed.sentiment ?? 50),
+    icpFit: clamp(parsed.icpFit ?? parsed.escalationRisk ?? parsed.resolutionLikelihood),
+    total: clamp(parsed.total),
+    rationale:
+      typeof parsed.rationale === "string" && parsed.rationale.length > 0
+        ? (parsed.rationale as string).slice(0, 200)
+        : "Updated score.",
+  };
+}
+
+function heuristicScore(
+  persona: PersonaDefinition,
+  msg: string,
+  previous?: DealIQ,
+): DealIQ {
+  const lower = msg.toLowerCase();
+  const base = previous ?? EMPTY_IQ;
+  const next = { ...base };
+  const bump = (k: keyof Omit<DealIQ, "total" | "rationale">, by: number) => {
+    next[k] = clamp(next[k] + by);
+  };
+
+  if (persona.id === "sales") {
+    if (/(churn|retention|cancel|losing customers)/.test(lower)) bump("need", 25);
+    if (/(this quarter|asap|urgent|soon|next week|next month)/.test(lower)) bump("timing", 25);
+    if (/(budget|pricing|cost|how much|plan)/.test(lower)) bump("budget", 15);
+    if (/(ceo|founder|vp|head of|director|cto|cmo)/.test(lower)) bump("authority", 30);
+    if (/(saas|fintech|d2c|subscription)/.test(lower)) bump("icpFit", 20);
+    if (/(demo|trial|pilot|book|meeting|call)/.test(lower)) bump("intent", 25);
+  } else if (persona.id === "support") {
+    if (/(error|broken|not working|crash|bug)/.test(lower)) bump("need", 25);
+    if (/(integration|api|webhook|sync)/.test(lower)) bump("icpFit", 20);
+    if (/(refund|cancel|escalate|manager|supervisor)/.test(lower)) bump("authority", 30);
+    if (/(billing|invoice|charge)/.test(lower)) bump("intent", 20);
+    if (/(urgent|production|down|critical)/.test(lower)) bump("timing", 30);
+  } else if (persona.id === "care") {
+    if (/(order|tracking|where is|delivery)/.test(lower)) bump("intent", 25);
+    if (/(return|exchange|wrong|damaged|broken)/.test(lower)) bump("need", 25);
+    if (/(refund|money back)/.test(lower)) bump("authority", 20);
+    if (/(angry|terrible|worst|never again)/.test(lower)) bump("sentiment", -25);
+    if (/(thanks|great|amazing|love)/.test(lower)) bump("sentiment", 15);
+    if (/(asap|today|now|urgent)/.test(lower)) bump("timing", 25);
+  }
+
+  if (/(love|great|excited|perfect|awesome|thank)/.test(lower)) bump("sentiment", 10);
+  if (/(annoyed|frustrated|hate|terrible|disappointed)/.test(lower)) bump("sentiment", -15);
+
+  next.total = computeTotal(next);
+  next.rationale = "Heuristic scoring (no API key).";
+  return next;
 }
 
 export function computeTotal(iq: Omit<DealIQ, "total" | "rationale">): number {
@@ -89,24 +136,4 @@ export function computeTotal(iq: Omit<DealIQ, "total" | "rationale">): number {
     iq.budget * 0.05 +
     iq.sentiment * 0.05;
   return clamp(weighted);
-}
-
-function heuristicScore(msg: string, previous?: DealIQ): DealIQ {
-  const lower = msg.toLowerCase();
-  const base = previous ?? EMPTY_IQ;
-  const next = { ...base };
-  const bump = (k: keyof Omit<DealIQ, "total" | "rationale">, by: number) => {
-    next[k] = clamp(next[k] + by);
-  };
-  if (/(churn|retention|cancel|losing customers)/.test(lower)) bump("need", 25);
-  if (/(this quarter|asap|urgent|soon|next week|next month)/.test(lower)) bump("timing", 25);
-  if (/(budget|pricing|cost|how much|plan)/.test(lower)) bump("budget", 15);
-  if (/(ceo|founder|vp|head of|director|cto|cmo)/.test(lower)) bump("authority", 30);
-  if (/(saas|fintech|d2c|subscription)/.test(lower)) bump("icpFit", 20);
-  if (/(demo|trial|pilot|book|meeting|call)/.test(lower)) bump("intent", 25);
-  if (/(love|great|excited|perfect|awesome)/.test(lower)) bump("sentiment", 10);
-  if (/(annoyed|frustrated|hate|terrible|disappointed)/.test(lower)) bump("sentiment", -15);
-  next.total = computeTotal(next);
-  next.rationale = "Heuristic scoring (no API key).";
-  return next;
 }

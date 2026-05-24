@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { Redis } from "@upstash/redis";
-import type { Lead } from "./types";
+import type { Lead, PersonaId } from "./types";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const LEADS_FILE = path.join(DATA_DIR, "leads.json");
@@ -130,10 +130,11 @@ export function newLeadId(): string {
   return `lead_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function emptyLead(): Lead {
+export function emptyLead(personaId: PersonaId = "sales"): Lead {
   const now = Date.now();
   return {
     id: newLeadId(),
+    personaId,
     createdAt: now,
     updatedAt: now,
     status: "new",
