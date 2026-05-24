@@ -1,11 +1,18 @@
 import Link from "next/link";
+import { A11yPanelButton } from "@/components/A11ySettings";
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
-      <nav className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+    <main id="main" className="min-h-screen bg-zinc-950 text-zinc-100">
+      <nav
+        aria-label="Primary"
+        className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between"
+      >
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400 via-sky-400 to-violet-400 flex items-center justify-center text-zinc-950 font-bold text-sm">
+          <div
+            aria-hidden="true"
+            className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400 via-sky-400 to-violet-400 flex items-center justify-center text-zinc-950 font-bold text-sm"
+          >
             C
           </div>
           <span className="font-semibold tracking-tight">ClosrAI Platform</span>
@@ -14,6 +21,7 @@ export default function Home() {
           </span>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
+          <A11yPanelButton />
           <Link
             href="/dashboard"
             className="text-sm text-zinc-300 hover:text-zinc-100 px-3 py-1.5"

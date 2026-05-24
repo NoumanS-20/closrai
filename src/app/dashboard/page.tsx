@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listLeads } from "@/lib/store";
 import type { Lead, PersonaId } from "@/lib/types";
+import { A11yPanelButton } from "@/components/A11ySettings";
 
 export const dynamic = "force-dynamic";
 
@@ -87,7 +88,7 @@ export default async function DashboardPage({
   const escalated = leads.filter((l: Lead) => l.status === "escalated").length;
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 px-4 py-8">
+    <main id="main" className="min-h-screen bg-zinc-950 text-zinc-100 px-4 py-8">
       <div className="max-w-6xl mx-auto space-y-6">
         <header className="flex items-center justify-between flex-wrap gap-3">
           <div>
@@ -96,12 +97,21 @@ export default async function DashboardPage({
               ClosrAI Platform · unified inbox across Sales, Support, and Customer Care
             </p>
           </div>
-          <Link
-            href="/chat"
-            className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-sm font-medium transition-colors"
-          >
-            Open bot picker ↗
-          </Link>
+          <div className="flex items-center gap-2">
+            <A11yPanelButton />
+            <Link
+              href="/"
+              className="text-sm text-zinc-400 hover:text-zinc-200 px-3 py-1.5"
+            >
+              Home
+            </Link>
+            <Link
+              href="/chat"
+              className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-sm font-medium transition-colors"
+            >
+              Open bot picker ↗
+            </Link>
+          </div>
         </header>
 
         <div className="flex gap-2 flex-wrap">

@@ -22,5 +22,91 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+}
+
+/* === Accessibility settings === */
+
+/* Larger base text */
+html[data-a11y-text="large"] {
+  font-size: 18px;
+}
+
+/* Dyslexia-friendly stack (Comic-Sans-class fonts are easier for many dyslexic readers
+   than narrow geometric sans-serifs; we fall back to standard system fonts) */
+html[data-a11y-font="dyslexic"] body,
+html[data-a11y-font="dyslexic"] input,
+html[data-a11y-font="dyslexic"] button,
+html[data-a11y-font="dyslexic"] textarea {
+  font-family: "OpenDyslexic", "Comic Sans MS", "Comic Neue", "Trebuchet MS",
+    Verdana, system-ui, -apple-system, sans-serif !important;
+  letter-spacing: 0.01em;
+  word-spacing: 0.05em;
+  line-height: 1.6;
+}
+
+/* High contrast mode: force near-pure text, brighter accents */
+html[data-a11y-contrast="high"] body {
+  background: #000000;
+  color: #ffffff;
+}
+html[data-a11y-contrast="high"] .text-zinc-400,
+html[data-a11y-contrast="high"] .text-zinc-500,
+html[data-a11y-contrast="high"] .text-zinc-600 {
+  color: #d4d4d8 !important;
+}
+html[data-a11y-contrast="high"] .border-zinc-800 {
+  border-color: #71717a !important;
+}
+html[data-a11y-contrast="high"] .bg-zinc-900,
+html[data-a11y-contrast="high"] .bg-zinc-950 {
+  background: #000000 !important;
+}
+
+/* Always underline links */
+html[data-a11y-links="underline"] a:not(.no-underline) {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Reduce motion — either the user toggled it OR the OS asks */
+html[data-a11y-motion="reduce"] *,
+html[data-a11y-motion="reduce"] *::before,
+html[data-a11y-motion="reduce"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Strong visible focus rings everywhere — applies on top of Tailwind's focus styles */
+*:focus-visible {
+  outline: 2px solid #34d399;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Screen-reader-only utility (Tailwind provides .sr-only but we also need
+   .focus:not-sr-only for the skip link) */
+.sr-only:not(:focus):not(:active) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

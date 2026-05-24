@@ -161,7 +161,9 @@ export function ChatWidget({
   const showMeeting = lead?.status === "meeting_booked" && lead.meeting;
 
   return (
-    <div
+    <section
+      aria-label={`${ui.rep} chat`}
+      aria-busy={busy}
       className={`grid ${
         showSidebar ? "lg:grid-cols-[1fr_280px]" : ""
       } gap-4 w-full ${embed ? "" : "max-w-5xl mx-auto"}`}
@@ -169,29 +171,53 @@ export function ChatWidget({
       <div
         className={`rounded-2xl border border-zinc-800 bg-zinc-950/80 backdrop-blur flex flex-col h-[640px] overflow-hidden shadow-2xl ${accent.ring}`}
       >
-        <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+        <header className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full animate-pulse ${accent.dot}`} />
+            <span
+              aria-hidden="true"
+              className={`w-2 h-2 rounded-full animate-pulse ${accent.dot}`}
+            />
             <div className="text-sm font-medium text-zinc-100">{ui.rep}</div>
             <div className="text-xs text-zinc-500">
               · {ui.company} {ui.label}
             </div>
           </div>
           {showMeeting && lead?.meeting && (
-            <div className={`text-xs ${accent.accentText}`}>
-              ✓ Meeting booked · {lead.meeting.confirmationCode}
+            <div
+              role="status"
+              className={`text-xs ${accent.accentText}`}
+            >
+              <span aria-hidden="true">✓ </span>
+              Meeting booked · {lead.meeting.confirmationCode}
             </div>
           )}
           {showEscalation && lead?.escalation && (
-            <div className="text-xs text-amber-300">
-              ⚠ Escalated · {lead.escalation.ticketId}
+            <div role="status" className="text-xs text-amber-300">
+              <span aria-hidden="true">⚠ </span>
+              Escalated · {lead.escalation.ticketId}
             </div>
           )}
-        </div>
+        </header>
 
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        <div
+          ref={scrollRef}
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions text"
+          aria-atomic="false"
+          aria-label={`Conversation with ${ui.rep}`}
+          className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
+        >
           {messages.map((m) => (
-            <div key={m.id} className="space-y-1">
+            <article
+              key={m.id}
+              aria-label={
+                m.role === "user"
+                  ? "You said"
+                  : `${ui.rep} said`
+              }
+              className="space-y-1"
+            >
               {m.role === "assistant" && showDebate && m.debate && (
                 <DebatePanel trace={m.debate} />
               )}
@@ -205,29 +231,46 @@ export function ChatWidget({
                 {m.content}
               </div>
               {m.toolCalls && m.toolCalls.length > 0 && (
-                <div className="mt-1 ml-2 flex flex-wrap gap-1">
+                <ul
+                  aria-label="Tools used for this reply"
+                  className="mt-1 ml-2 flex flex-wrap gap-1 list-none p-0"
+                >
                   {m.toolCalls.map((tc, i) => (
-                    <span
+                    <li
                       key={i}
                       className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-zinc-800 bg-zinc-900/60 text-zinc-400"
                     >
-                      🛠 {tc.name}
-                    </span>
+                      <span aria-hidden="true">🛠 </span>
+                      <span className="sr-only">Tool: </span>
+                      {tc.name}
+                    </li>
                   ))}
-                </div>
+                </ul>
               )}
-            </div>
+            </article>
           ))}
           {busy && (
-            <div className="mr-auto bg-zinc-900 border border-zinc-800 rounded-2xl rounded-bl-sm px-4 py-2 text-sm text-zinc-400 flex gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-bounce" />
-              <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-bounce [animation-delay:120ms]" />
-              <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-bounce [animation-delay:240ms]" />
+            <div
+              role="status"
+              aria-label={`${ui.rep} is thinking`}
+              className="mr-auto bg-zinc-900 border border-zinc-800 rounded-2xl rounded-bl-sm px-4 py-2 text-sm text-zinc-400 flex gap-1"
+            >
+              <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-bounce" />
+              <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-bounce [animation-delay:120ms]" />
+              <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-zinc-500 animate-bounce [animation-delay:240ms]" />
+              <span className="sr-only">{ui.rep} is thinking…</span>
             </div>
           )}
         </div>
 
-        <div className="border-t border-zinc-800 p-3">
+        <form
+          className="border-t border-zinc-800 p-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            send();
+          }}
+          aria-label={`Send a message to ${ui.rep}`}
+        >
           <div className="flex gap-2 items-center">
             {voiceEnabled && (
               <VoiceButton
@@ -244,7 +287,12 @@ export function ChatWidget({
                 }
               />
             )}
+            <label htmlFor={`closrai-input-${ui.id}`} className="sr-only">
+              Type your message to {ui.rep}
+            </label>
             <input
+              id={`closrai-input-${ui.id}`}
+              type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
@@ -255,17 +303,21 @@ export function ChatWidget({
               }}
               placeholder="Type or tap the mic…"
               disabled={busy}
+              autoComplete="off"
+              aria-disabled={busy}
               className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-600"
             />
             <button
-              onClick={() => send()}
+              type="submit"
               disabled={busy || !input.trim()}
+              aria-disabled={busy || !input.trim()}
+              aria-label="Send message"
               className={`px-4 py-2 rounded-xl disabled:bg-zinc-800 disabled:text-zinc-500 font-medium text-sm transition-colors ${accent.button}`}
             >
               Send
             </button>
           </div>
-        </div>
+        </form>
       </div>
 
       {showSidebar && (
@@ -318,6 +370,6 @@ export function ChatWidget({
           )}
         </div>
       )}
-    </div>
+    </section>
   );
 }

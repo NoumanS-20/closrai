@@ -9,7 +9,7 @@ export const metadata = {
 
 export default function EmbedDemoPage() {
   return (
-    <main className="min-h-screen bg-white text-zinc-900">
+    <main id="main" className="min-h-screen bg-white text-zinc-900">
       <Script src="/embed.js" data-persona="care" strategy="afterInteractive" />
 
       <div className="bg-zinc-100 border-b border-zinc-200 text-xs text-zinc-600 px-4 py-2 flex items-center justify-between">

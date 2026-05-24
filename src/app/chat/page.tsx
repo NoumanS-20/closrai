@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { A11yPanelButton } from "@/components/A11ySettings";
 
 const TILES = [
   {
@@ -35,8 +36,17 @@ const TILES = [
 
 export default function ChatHubPage() {
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 px-4 py-12">
+    <main id="main" className="min-h-screen bg-zinc-950 text-zinc-100 px-4 py-12">
       <div className="max-w-5xl mx-auto space-y-10">
+        <div className="flex items-center justify-between">
+          <Link
+            href="/"
+            className="text-xs text-zinc-500 hover:text-zinc-200"
+          >
+            ← Home
+          </Link>
+          <A11yPanelButton />
+        </div>
         <header className="text-center space-y-3">
           <div className="inline-flex items-center gap-2 text-xs uppercase tracking-wider text-emerald-300 border border-emerald-500/30 bg-emerald-500/5 px-3 py-1 rounded-full">
             <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />

@@ -32,7 +32,7 @@ export default async function LeadDetailPage({
   const scoreLabel = SCORE_LABEL[lead.personaId];
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 px-4 py-8">
+    <main id="main" className="min-h-screen bg-zinc-950 text-zinc-100 px-4 py-8">
       <div className="max-w-6xl mx-auto space-y-6">
         <Link
           href="/dashboard"

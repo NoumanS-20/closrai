@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { A11yProvider } from "@/components/A11ySettings";
+import { SkipToContent } from "@/components/SkipToContent";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,9 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ClosrAI — AI SDR for B2B SaaS",
+  title: "ClosrAI Platform — Sales, Support, Care bots that argue with themselves",
   description:
-    "ClosrAI is an AI Sales Development Rep that qualifies B2B SaaS visitors in real time, runs an internal Skeptic-vs-Closer debate on objections, and books meetings with a live transparent Deal IQ score. Built for the FlowZint AI Hackathon 2026.",
+    "ClosrAI is a multi-track AI bot platform — Sales SDR, Support Agent, and Customer Care, all sharing one agent runtime with a Skeptic-vs-Closer multi-agent debate, live IQ scoring, voice mode, and a one-line script embed. Built for the FlowZint AI Hackathon 2026.",
 };
 
 export default function RootLayout({
@@ -28,7 +30,12 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
     >
-      <body className="min-h-full bg-zinc-950 text-zinc-100">{children}</body>
+      <body className="min-h-full bg-zinc-950 text-zinc-100">
+        <A11yProvider>
+          <SkipToContent />
+          {children}
+        </A11yProvider>
+      </body>
     </html>
   );
 }
