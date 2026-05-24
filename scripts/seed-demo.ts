@@ -20,6 +20,7 @@ function mid(prefix: string, n: number): string {
 const leads: Lead[] = [
   {
     id: id("priya"),
+    personaId: "sales",
     createdAt: now - 3 * hour,
     updatedAt: now - 2 * hour,
     name: "Priya Iyer",
@@ -36,8 +37,7 @@ const leads: Lead[] = [
     },
     enrichment: {
       domain: "plyo.io",
-      summary:
-        "Plyo — workplace wellness SaaS for D2C and SaaS teams in India. Series A.",
+      summary: "Plyo — workplace wellness SaaS for D2C and SaaS teams in India. Series A.",
       industry: "B2B SaaS",
       techStack: ["Next.js", "Segment"],
       source: "stub",
@@ -92,20 +92,15 @@ const leads: Lead[] = [
         content:
           "Totally hear you — \"another ₹2L line item\" is the wrong framing if the impact isn't obvious in 30 days. Most teams in your range start on a usage-based pilot tied to retained MRR, so you don't pay if we don't move the number. Worth seeing what that looks like?",
         debate: {
-          objection:
-            "Honestly the pricing on AI sales tools has gotten ridiculous though — we're not going to spend ₹2 lakh a month on this.",
+          objection: "Pricing on AI sales tools has gotten ridiculous — not spending ₹2L/month.",
           skeptic:
-            "Real concern isn't price absolute — it's pricing risk. She's been burned by SaaS tools that bill flat regardless of outcomes. She'll walk if we sound like another fixed-fee vendor.",
+            "Real concern isn't price absolute — it's pricing risk. She's been burned by flat-fee SaaS that bills regardless of outcomes. She'll walk if we sound like another fixed-fee vendor.",
           closer:
-            "Acknowledge the pricing fatigue openly. Reframe to outcome-based pricing: pilot tied to retained MRR, no upside without proof. Lower the perceived risk before discussing numbers.",
+            "Acknowledge pricing fatigue openly. Reframe to outcome-based pricing: pilot tied to retained MRR, no upside without proof. Lower perceived risk before discussing numbers.",
           resolution: "(rendered as the message above)",
         },
         toolCalls: [
-          {
-            name: "handle_objection",
-            input: { objection: "Pricing on AI sales tools has gotten ridiculous." },
-            output: {},
-          },
+          { name: "handle_objection", input: { objection: "Pricing too high" }, output: {} },
         ],
       },
       {
@@ -122,16 +117,7 @@ const leads: Lead[] = [
         content:
           "Done — sent the invite to priya@plyo.io for tomorrow at 3 PM IST (confirmation code MEET-PLY3K9). Aarav, our founder, will run it. He'll come with two anonymized D2C SaaS accounts we onboarded last month so you can stress-test the retention model on real data.",
         toolCalls: [
-          {
-            name: "book_meeting",
-            input: {
-              attendee_email: "priya@plyo.io",
-              attendee_name: "Priya Iyer",
-              topic: "Plyo retention",
-              preferred_day_offset_days: 1,
-            },
-            output: {},
-          },
+          { name: "book_meeting", input: {}, output: {} },
           { name: "save_lead", input: { status: "meeting_booked" }, output: {} },
           { name: "draft_follow_up_email", input: {}, output: {} },
         ],
@@ -139,9 +125,151 @@ const leads: Lead[] = [
     ],
   },
   {
-    id: id("rohan"),
+    id: id("vikram"),
+    personaId: "support",
+    createdAt: now - 5 * hour,
+    updatedAt: now - 4 * hour,
+    name: "Vikram Rao",
+    email: "vikram@stripeshield.in",
+    company: "StripeShield",
+    role: "Engineering Lead",
+    status: "resolved",
+    resolvedSummary:
+      "Helped diagnose Segment ingestion lag — turned out to be a stale write key. Customer fixed in chat.",
+    dealIq: {
+      total: 88,
+      budget: 60,
+      authority: 75,
+      need: 90,
+      timing: 80,
+      intent: 95,
+      sentiment: 70,
+      icpFit: 85,
+      rationale: "Specific technical issue, on Growth plan, resolved with KB hit.",
+    },
+    transcript: [
+      {
+        id: mid("vikram", 1),
+        role: "assistant",
+        ts: now - 5 * hour,
+        content:
+          "Hi! I'm ClosrSupport from Lumen Analytics. I can help with product questions, troubleshooting, billing, integrations, or anything else. What's going on?",
+      },
+      {
+        id: mid("vikram", 2),
+        role: "user",
+        ts: now - 5 * hour + 30 * 1000,
+        content:
+          "Our Segment events stopped flowing into Lumen about 6 hours ago. Health scores are stale. We're on Growth plan.",
+      },
+      {
+        id: mid("vikram", 3),
+        role: "assistant",
+        ts: now - 5 * hour + 60 * 1000,
+        content:
+          "That usually points to one of three things: a stale Segment write key, a Segment workspace renamed/moved, or a recent destination toggle. Easiest first — open Lumen → Integrations → Segment and confirm the write key matches what's in your Segment workspace under Connections → Sources → your-source → Settings. If those drifted, the events will queue without erroring on Segment's side.",
+        toolCalls: [
+          { name: "search_kb", input: { query: "segment events stopped flowing integration" }, output: {} },
+        ],
+      },
+      {
+        id: mid("vikram", 4),
+        role: "user",
+        ts: now - 5 * hour + 5 * min,
+        content: "You were right — the write key didn't match. Rotated and events are flowing again. Thank you!",
+      },
+      {
+        id: mid("vikram", 5),
+        role: "assistant",
+        ts: now - 5 * hour + 5.5 * min,
+        content:
+          "Glad that worked. For future, you can enable \"alert on >10min ingestion gap\" under Settings → Alerting → Ingestion to catch this within minutes instead of hours. Anything else?",
+        toolCalls: [{ name: "save_lead", input: { status: "resolved" }, output: {} }],
+      },
+    ],
+  },
+  {
+    id: id("anita"),
+    personaId: "care",
     createdAt: now - 8 * hour,
     updatedAt: now - 7 * hour,
+    name: "Anita Sharma",
+    email: "anita.sharma@gmail.com",
+    phone: "+91 98xxxxxx12",
+    status: "escalated",
+    escalation: {
+      ticketId: "TIX-DMG-9F2K",
+      priority: "high",
+      reason:
+        "Cast-iron skillet arrived with a visible crack along the rim. Customer paid ₹2499, photographic evidence shared in chat.",
+      createdAtIso: new Date(now - 7 * hour).toISOString(),
+    },
+    orderLookup: {
+      orderId: "PLY-12345",
+      status: "delivered",
+      items: [
+        { name: "Plyo Cast-Iron Skillet (10 inch)", qty: 1, priceInr: 2499 },
+        { name: "Plyo Wooden Spatula Set (3 pcs)", qty: 1, priceInr: 599 },
+      ],
+      totalInr: 3098,
+      placedIso: new Date(now - 4 * 24 * hour).toISOString(),
+      expectedDeliveryIso: new Date(now - 6 * hour).toISOString(),
+      trackingUrl: "https://track.delhivery.com/PLY-12345",
+      shippingPincode: "560034",
+    },
+    dealIq: {
+      total: 42,
+      budget: 0,
+      authority: 0,
+      need: 80,
+      timing: 90,
+      intent: 60,
+      sentiment: 20,
+      icpFit: 75,
+      rationale:
+        "Damaged-on-arrival case, customer upset but coherent — escalated to fulfillment with high priority.",
+    },
+    transcript: [
+      {
+        id: mid("anita", 1),
+        role: "assistant",
+        ts: now - 8 * hour,
+        content:
+          "Hi! I'm PlyoCare. I can help with order status, returns, exchanges, refunds, or anything about your account. What can I do for you?",
+      },
+      {
+        id: mid("anita", 2),
+        role: "user",
+        ts: now - 8 * hour + 40 * 1000,
+        content:
+          "Order PLY-12345 just arrived. The cast-iron skillet has a visible crack along the rim — it's unusable. I paid ₹2499 for it.",
+      },
+      {
+        id: mid("anita", 3),
+        role: "assistant",
+        ts: now - 8 * hour + 70 * 1000,
+        content:
+          "I'm really sorry — that's not what should be in your kitchen this evening. I've pulled up PLY-12345 and can see it was delivered today. This is a damage-on-arrival case so I'm escalating it to our fulfillment lead with high priority (ticket TIX-DMG-9F2K). They'll arrange a free pickup and a fresh replacement, or a full refund to your original payment method — your call. Which would you prefer?",
+        toolCalls: [
+          { name: "lookup_order", input: { identifier: "PLY-12345" }, output: {} },
+          {
+            name: "escalate_to_human",
+            input: {
+              reason: "Damaged-on-arrival cast iron skillet",
+              priority: "high",
+            },
+            output: {},
+          },
+          { name: "save_lead", input: { status: "escalated" }, output: {} },
+        ],
+      },
+    ],
+  },
+  {
+    id: id("rohan"),
+    personaId: "sales",
+    createdAt: now - 11 * hour,
+    updatedAt: now - 10 * hour,
     name: "Rohan Kapoor",
     email: "rk@bytecart.in",
     company: "Bytecart",
@@ -170,55 +298,23 @@ const leads: Lead[] = [
       {
         id: mid("rohan", 1),
         role: "assistant",
-        ts: now - 8 * hour,
+        ts: now - 11 * hour,
         content:
           "Hey 👋 I'm ClosrAI from Lumen Analytics. We help SaaS and D2C teams cut churn with predictive retention playbooks. Mind if I ask what brought you here today?",
       },
       {
         id: mid("rohan", 2),
         role: "user",
-        ts: now - 8 * hour + 40 * 1000,
+        ts: now - 11 * hour + 40 * 1000,
         content:
           "Just exploring. Our CSMs are spending too much time triaging at-risk accounts manually. We have ~3k merchants on Bytecart.",
       },
       {
         id: mid("rohan", 3),
         role: "assistant",
-        ts: now - 8 * hour + 70 * 1000,
+        ts: now - 11 * hour + 70 * 1000,
         content:
           "Got it — manual triage at 3k merchants is exactly where predictive scoring earns its keep. Are your CSMs working off Slack alerts and a spreadsheet today, or do you have a tool that just isn't surfacing the right signals?",
-      },
-    ],
-  },
-  {
-    id: id("anon"),
-    createdAt: now - 11 * hour,
-    updatedAt: now - 11 * hour + 90 * 1000,
-    status: "new",
-    dealIq: {
-      total: 18,
-      budget: 0,
-      authority: 0,
-      need: 20,
-      timing: 0,
-      intent: 25,
-      sentiment: 60,
-      icpFit: 30,
-      rationale: "Anonymous browser, vague intent — keep qualifying.",
-    },
-    transcript: [
-      {
-        id: mid("anon", 1),
-        role: "assistant",
-        ts: now - 11 * hour,
-        content:
-          "Hey 👋 I'm ClosrAI from Lumen Analytics. We help SaaS and D2C teams cut churn with predictive retention playbooks. Mind if I ask what brought you here today?",
-      },
-      {
-        id: mid("anon", 2),
-        role: "user",
-        ts: now - 11 * hour + 30 * 1000,
-        content: "Just looking",
       },
     ],
   },
@@ -227,7 +323,7 @@ const leads: Lead[] = [
 async function main() {
   await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.writeFile(LEADS_FILE, JSON.stringify(leads, null, 2), "utf8");
-  console.log(`Seeded ${leads.length} leads to ${LEADS_FILE}`);
+  console.log(`Seeded ${leads.length} leads across personas to ${LEADS_FILE}`);
 }
 
 main().catch((err) => {

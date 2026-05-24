@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChatMessage, Lead, PersonaId } from "@/lib/types";
 import { DealIQGauge } from "./DealIQGauge";
 import { DebatePanel } from "./DebatePanel";
@@ -88,28 +88,19 @@ export function ChatWidget({
   const ui = PERSONA_UI[personaId];
   const accent = ACCENT_CLASSES[ui.accent];
 
-  const opening = useMemo<ChatMessage>(
-    () => ({
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [
+    {
       id: `msg_open_${ui.id}`,
       role: "assistant",
       ts: Date.now(),
       content: ui.greeting,
-    }),
-    [ui.id, ui.greeting],
-  );
-
-  const [messages, setMessages] = useState<ChatMessage[]>([opening]);
+    },
+  ]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [leadId, setLeadId] = useState<string | undefined>();
   const [lead, setLead] = useState<Lead | undefined>();
   const scrollRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    setMessages([opening]);
-    setLeadId(undefined);
-    setLead(undefined);
-  }, [opening]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
