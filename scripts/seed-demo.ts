@@ -144,7 +144,7 @@ const leads: Lead[] = [
       timing: 80,
       intent: 95,
       sentiment: 70,
-      icpFit: 85,
+      icpFit: 12,
       rationale: "Specific technical issue, on Growth plan, resolved with KB hit.",
     },
     transcript: [
@@ -219,8 +219,8 @@ const leads: Lead[] = [
     },
     dealIq: {
       total: 42,
-      budget: 0,
-      authority: 0,
+      budget: 20,
+      authority: 80,
       need: 80,
       timing: 90,
       intent: 60,

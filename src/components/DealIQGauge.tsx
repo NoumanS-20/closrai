@@ -1,11 +1,50 @@
 "use client";
 
-import type { DealIQ } from "@/lib/types";
+import type { DealIQ, PersonaId } from "@/lib/types";
 
 interface Props {
   iq?: DealIQ;
   compact?: boolean;
+  personaId?: PersonaId;
+  label?: string;
 }
+
+type MetricKey = keyof Omit<DealIQ, "total" | "rationale">;
+
+interface MetricConfig {
+  key: MetricKey;
+  label: string;
+  polarity?: "positive" | "risk";
+}
+
+const METRICS: Record<PersonaId, MetricConfig[]> = {
+  sales: [
+    { key: "need", label: "Need" },
+    { key: "intent", label: "Intent" },
+    { key: "icpFit", label: "ICP Fit" },
+    { key: "authority", label: "Authority" },
+    { key: "timing", label: "Timing" },
+    { key: "budget", label: "Budget" },
+    { key: "sentiment", label: "Sentiment" },
+  ],
+  support: [
+    { key: "intent", label: "Resolution" },
+    { key: "need", label: "KB coverage" },
+    { key: "budget", label: "Clarity" },
+    { key: "authority", label: "Specificity" },
+    { key: "timing", label: "Urgency" },
+    { key: "icpFit", label: "Escalation risk", polarity: "risk" },
+    { key: "sentiment", label: "Sentiment" },
+  ],
+  care: [
+    { key: "budget", label: "Satisfaction" },
+    { key: "intent", label: "Resolution" },
+    { key: "authority", label: "Loyalty risk", polarity: "risk" },
+    { key: "need", label: "Complexity", polarity: "risk" },
+    { key: "timing", label: "Urgency" },
+    { key: "sentiment", label: "Sentiment" },
+  ],
+};
 
 function ringStroke(total: number): string {
   if (total >= 75) return "oklch(0.50 0.16 145)";
@@ -21,11 +60,23 @@ function tier(total: number): string {
   return "cold";
 }
 
-function Bar({ label, value }: { label: string; value: number }) {
+function Bar({
+  label,
+  value,
+  polarity = "positive",
+}: {
+  label: string;
+  value: number;
+  polarity?: "positive" | "risk";
+}) {
   const v = Math.max(0, Math.min(100, value));
   const slug = label.toLowerCase().replace(/\s+/g, "-");
+  const valueText =
+    polarity === "risk"
+      ? `${v} out of 100, lower is better`
+      : `${v} out of 100`;
   return (
-    <div className="dq-bar">
+    <div className={"dq-bar" + (polarity === "risk" ? " dq-bar--risk" : "")}>
       <span className="dq-bar__label" id={`bar-label-${slug}`}>
         {label}
       </span>
@@ -36,7 +87,7 @@ function Bar({ label, value }: { label: string; value: number }) {
         aria-valuenow={v}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuetext={`${v} out of 100`}
+        aria-valuetext={valueText}
       >
         <div className="dq-bar__fill" style={{ width: `${v}%` }} />
       </div>
@@ -47,7 +98,12 @@ function Bar({ label, value }: { label: string; value: number }) {
   );
 }
 
-export function DealIQGauge({ iq, compact }: Props) {
+export function DealIQGauge({
+  iq,
+  compact,
+  personaId = "sales",
+  label = "Lead score",
+}: Props) {
   const total = iq?.total ?? 0;
   const ringSize = compact ? 56 : 110;
   const stroke = compact ? 6 : 9;
@@ -56,7 +112,7 @@ export function DealIQGauge({ iq, compact }: Props) {
   const offset = circ - (total / 100) * circ;
 
   const summary = iq
-    ? `Score ${total} out of 100, ${tier(total)} lead. ${iq.rationale ?? ""}`
+    ? `${label} ${total} out of 100, ${tier(total)} tier. ${iq.rationale ?? ""}`
     : "Score not yet available.";
 
   const ringColor = ringStroke(total);
@@ -65,13 +121,13 @@ export function DealIQGauge({ iq, compact }: Props) {
     <div
       className={"dq-gauge" + (compact ? " dq-gauge--compact" : "")}
       role="group"
-      aria-label="Lead score breakdown"
+      aria-label={`${label} breakdown`}
     >
       <div
         className="dq-gauge__ring"
         style={{ width: ringSize, height: ringSize }}
         role="img"
-        aria-label={`Score ${total} out of 100`}
+        aria-label={`${label} ${total} out of 100`}
       >
         <svg
           width={ringSize}
@@ -112,13 +168,14 @@ export function DealIQGauge({ iq, compact }: Props) {
 
       {!compact && (
         <div className="dq-gauge__bars">
-          <Bar label="Need" value={iq?.need ?? 0} />
-          <Bar label="Intent" value={iq?.intent ?? 0} />
-          <Bar label="ICP Fit" value={iq?.icpFit ?? 0} />
-          <Bar label="Authority" value={iq?.authority ?? 0} />
-          <Bar label="Timing" value={iq?.timing ?? 0} />
-          <Bar label="Budget" value={iq?.budget ?? 0} />
-          <Bar label="Sentiment" value={iq?.sentiment ?? 0} />
+          {METRICS[personaId].map((metric) => (
+            <Bar
+              key={metric.key}
+              label={metric.label}
+              value={iq?.[metric.key] ?? 0}
+              polarity={metric.polarity}
+            />
+          ))}
         </div>
       )}
 
@@ -171,6 +228,9 @@ export function DealIQGauge({ iq, compact }: Props) {
           border-radius: 999px;
           background: linear-gradient(90deg, oklch(0.66 0.155 38), oklch(0.80 0.13 80));
           transition: width 500ms var(--ease);
+        }
+        .dq-bar--risk .dq-bar__fill {
+          background: linear-gradient(90deg, oklch(0.72 0.14 62), oklch(0.60 0.17 28));
         }
         .dq-bar__value {
           font-family: var(--font-mono);

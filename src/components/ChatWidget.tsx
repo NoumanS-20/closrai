@@ -74,6 +74,7 @@ export function ChatWidget({
   const [busy, setBusy] = useState(false);
   const [leadId, setLeadId] = useState<string | undefined>();
   const [lead, setLead] = useState<Lead | undefined>();
+  const [voiceSessionActive, setVoiceSessionActive] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -82,6 +83,17 @@ export function ChatWidget({
       behavior: "smooth",
     });
   }, [messages.length, busy]);
+
+  useEffect(() => {
+    if (!embed) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        window.parent?.postMessage({ type: "closrai:close" }, "*");
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [embed]);
 
   async function send(textOverride?: string) {
     const text = (textOverride ?? input).trim();
@@ -228,10 +240,11 @@ export function ChatWidget({
             <VoiceButton
               disabled={busy}
               onTranscript={(text) => {
+                setVoiceSessionActive(true);
                 setInput("");
                 send(text);
               }}
-              speakingText={lastAssistantContent}
+              speakingText={voiceSessionActive ? lastAssistantContent : undefined}
             />
           )}
           <label htmlFor={`closrai-input-${ui.id}`} className="sr-only">
@@ -242,7 +255,7 @@ export function ChatWidget({
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Type or tap the mic…"
+            placeholder="Type your message..."
             disabled={busy}
             autoComplete="off"
             aria-disabled={busy}
@@ -266,7 +279,7 @@ export function ChatWidget({
         <aside className="chat-widget__rail" aria-label={`${ui.label} signals`}>
           <section className="rail-card">
             <p className="eyebrow">Live {ui.scoreLabel}</p>
-            <DealIQGauge iq={lead?.dealIq} />
+            <DealIQGauge iq={lead?.dealIq} personaId={ui.id} label={ui.scoreLabel} />
           </section>
 
           {showOrder && lead?.orderLookup && (
@@ -318,7 +331,11 @@ export function ChatWidget({
           border-radius: var(--radius-xl);
           overflow: hidden;
           box-shadow: var(--shadow-lift);
-          height: 640px;
+          height: clamp(460px, calc(100dvh - 285px), 640px);
+        }
+        .chat-widget--embed .chat-widget__main {
+          height: calc(100dvh - 20px);
+          min-height: 0;
         }
 
         .chat-widget__head {
@@ -345,9 +362,9 @@ export function ChatWidget({
                       inset 0 2px 3px rgba(255,255,255,.4);
           flex-shrink: 0;
         }
-        .chat-widget__orb[data-persona="sales"] { background: radial-gradient(circle at 30% 25%, oklch(0.85 0.14 50), oklch(0.50 0.20 28)); }
-        .chat-widget__orb[data-persona="support"] { background: radial-gradient(circle at 30% 25%, oklch(0.92 0.12 90), oklch(0.55 0.15 60)); }
-        .chat-widget__orb[data-persona="care"] { background: radial-gradient(circle at 30% 25%, oklch(0.88 0.10 25), oklch(0.55 0.13 15)); }
+        .chat-widget__orb[data-persona="sales"] { background: radial-gradient(circle at 30% 25%, oklch(0.88 0.11 155), oklch(0.48 0.17 158)); }
+        .chat-widget__orb[data-persona="support"] { background: radial-gradient(circle at 30% 25%, oklch(0.90 0.09 225), oklch(0.52 0.16 242)); }
+        .chat-widget__orb[data-persona="care"] { background: radial-gradient(circle at 30% 25%, oklch(0.88 0.10 318), oklch(0.50 0.16 300)); }
 
         .chat-widget__status {
           display: inline-flex; align-items: center; gap: 6px;
@@ -425,6 +442,7 @@ export function ChatWidget({
         }
         .chat-widget__form input {
           flex: 1; padding: 12px 16px;
+          min-width: 0;
           border: 1px solid var(--line);
           border-radius: var(--radius-pill);
           background: var(--bg);
@@ -478,6 +496,39 @@ export function ChatWidget({
           background: var(--surface);
         }
         .rail-link:hover { background: var(--surface-2); text-decoration: none; }
+
+        @media (max-width: 980px) {
+          .chat-widget__main {
+            height: clamp(500px, calc(100dvh - 320px), 600px);
+          }
+          .chat-widget--embed .chat-widget__main {
+            height: calc(100dvh - 20px);
+          }
+        }
+        @media (max-width: 620px) {
+          .chat-widget {
+            gap: 16px;
+          }
+          .chat-widget__main {
+            height: 520px;
+            border-radius: var(--radius-lg);
+          }
+          .chat-widget--embed .chat-widget__main {
+            height: calc(100dvh - 20px);
+          }
+          .chat-widget__head {
+            padding: 14px 16px;
+          }
+          .chat-widget__log {
+            padding: 20px 16px;
+          }
+          .msg {
+            max-width: 88%;
+          }
+          .chat-widget__form {
+            padding: 12px;
+          }
+        }
       `}</style>
     </section>
   );

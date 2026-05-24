@@ -144,11 +144,35 @@ export function A11yPanelButton() {
 
   useEffect(() => {
     if (!open) return;
+    const focusTimer = window.setTimeout(() => {
+      const firstControl = panelRef.current?.querySelector<HTMLElement>(
+        "[role='switch'], [role='radio'], .a11y-reset",
+      );
+      firstControl?.focus();
+    }, 0);
+
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.preventDefault();
         setOpen(false);
         btnRef.current?.focus();
+      }
+      if (e.key === "Tab" && panelRef.current) {
+        const controls = Array.from(
+          panelRef.current.querySelectorAll<HTMLElement>(
+            "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])",
+          ),
+        ).filter((el) => !el.hasAttribute("disabled"));
+        if (controls.length === 0) return;
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     }
     function onClick(e: MouseEvent) {
@@ -166,6 +190,7 @@ export function A11yPanelButton() {
     document.addEventListener("keydown", onKey);
     document.addEventListener("mousedown", onClick);
     return () => {
+      window.clearTimeout(focusTimer);
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("mousedown", onClick);
     };
@@ -293,18 +318,6 @@ export function A11yPanelButton() {
           </button>
 
           <style>{`
-            .a11y-panel {
-              position: absolute;
-              right: 0;
-              top: calc(100% + 10px);
-              width: 340px;
-              background: var(--surface);
-              border: 1px solid var(--line);
-              border-radius: var(--radius-lg);
-              box-shadow: var(--shadow-lift);
-              padding: 18px;
-              z-index: 1000;
-            }
             .a11y-panel__head {
               display: flex; justify-content: space-between; align-items: center;
               margin-bottom: 14px;
@@ -362,6 +375,62 @@ export function A11yPanelButton() {
           `}</style>
         </div>
       )}
+
+      <style>{`
+        .a11y-trigger {
+          height: 32px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          padding: 0 11px;
+          border: 1px solid var(--line);
+          border-radius: var(--radius-pill);
+          background: color-mix(in oklab, var(--surface) 88%, transparent);
+          color: var(--ink-soft);
+          cursor: pointer;
+          font-size: 0.82rem;
+          line-height: 1;
+          white-space: nowrap;
+          box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
+          transition:
+            background var(--dur-fast) var(--ease),
+            color var(--dur-fast) var(--ease),
+            border-color var(--dur-fast) var(--ease);
+        }
+        .a11y-trigger:hover,
+        .a11y-trigger[aria-expanded="true"] {
+          background: var(--surface);
+          color: var(--ink);
+          border-color: var(--line);
+        }
+        .a11y-trigger svg {
+          width: 18px;
+          height: 18px;
+          flex: 0 0 auto;
+        }
+        .a11y-panel {
+          position: absolute;
+          right: 0;
+          top: calc(100% + 10px);
+          width: min(340px, calc(100vw - 28px));
+          background: var(--surface);
+          border: 1px solid var(--line);
+          border-radius: var(--radius-lg);
+          box-shadow: var(--shadow-lift);
+          padding: 18px;
+          z-index: 1000;
+        }
+        @media (max-width: 520px) {
+          .a11y-trigger {
+            width: 34px;
+            padding: 0;
+          }
+          .a11y-trigger span {
+            display: none;
+          }
+        }
+      `}</style>
     </div>
   );
 }

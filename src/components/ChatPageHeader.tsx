@@ -17,8 +17,8 @@ export function ChatPageHeader({ persona, tag, title, description }: Props) {
       <header className="chat-hd">
         <div className="chat-hd__id">
           <div className="chat-hd__orb">
-            <Orb kind={persona} size={84} float={false} idle />
-            <OrbFace size={84} />
+            <Orb kind={persona} size={72} float={false} idle />
+            <OrbFace size={72} />
           </div>
           <div>
             <p className="eyebrow">{tag}</p>
@@ -44,7 +44,11 @@ export function ChatPageHeader({ persona, tag, title, description }: Props) {
         .chat-hd__id {
           display: flex; gap: 22px; align-items: center;
         }
-        .chat-hd__orb { position: relative; flex-shrink: 0; width: 84px; height: 84px; }
+        .chat-hd__orb { position: relative; flex-shrink: 0; width: 72px; height: 72px; }
+        .chat-hd__orb .orb-3d__halo,
+        .chat-hd__orb .orb-3d__ring {
+          display: none;
+        }
         .chat-hd__id h1 {
           font-size: clamp(1.8rem, 3.2vw, 2.4rem);
           margin: 4px 0;
@@ -55,8 +59,16 @@ export function ChatPageHeader({ persona, tag, title, description }: Props) {
           font-size: 0.95rem;
         }
         @media (max-width: 600px) {
-          .chat-hd__id { gap: 16px; }
-          .chat-hd__orb { width: 64px; height: 64px; }
+          .chat-hd__id { gap: 14px; align-items: flex-start; }
+          .chat-hd__orb { width: 58px; height: 58px; margin-top: 6px; }
+          .chat-hd__orb .orb-3d {
+            width: 58px !important;
+            height: 58px !important;
+          }
+          .chat-hd__desc {
+            font-size: 0.9rem;
+            line-height: 1.35;
+          }
         }
       `}</style>
     </>

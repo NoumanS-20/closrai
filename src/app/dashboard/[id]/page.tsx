@@ -31,6 +31,9 @@ export default async function LeadDetailPage({
 
   const personaLabel = PERSONA_LABEL[lead.personaId];
   const scoreLabel = SCORE_LABEL[lead.personaId];
+  const leadMeta = [lead.role, lead.company, lead.email, lead.phone].filter(
+    (value): value is string => Boolean(value),
+  );
 
   return (
     <>
@@ -48,9 +51,16 @@ export default async function LeadDetailPage({
                 {lead.name ?? <span className="lead__anon">Anonymous</span>}
               </h1>
               <p className="lead__meta">
-                {[lead.role, lead.company].filter(Boolean).join(" · ")}
-                {lead.email && <span className="lead__sep">{lead.email}</span>}
-                {lead.phone && <span className="lead__sep">{lead.phone}</span>}
+                {leadMeta.length > 0 ? (
+                  leadMeta.map((item, index) => (
+                    <span key={`${item}-${index}`}>
+                      {index > 0 && <span className="lead__dot"> · </span>}
+                      {item}
+                    </span>
+                  ))
+                ) : (
+                  <span>No contact details captured yet</span>
+                )}
               </p>
             </div>
             <div className="lead__head-tags">
@@ -120,7 +130,11 @@ export default async function LeadDetailPage({
             <aside className="lead__rail" aria-label="Signals">
               <section className="card rail-card">
                 <p className="eyebrow">{scoreLabel}</p>
-                <DealIQGauge iq={lead.dealIq} />
+                <DealIQGauge
+                  iq={lead.dealIq}
+                  personaId={lead.personaId}
+                  label={scoreLabel}
+                />
               </section>
 
               {lead.orderLookup && (
@@ -202,7 +216,7 @@ export default async function LeadDetailPage({
           .lead__head h1 { font-size: clamp(1.8rem, 3.2vw, 2.2rem); margin: 6px 0 4px; }
           .lead__anon { color: var(--ink-mute); font-style: italic; font-weight: 400; }
           .lead__meta { color: var(--ink-soft); margin: 0; font-size: 0.95rem; }
-          .lead__sep { margin-left: 12px; color: var(--ink-mute); }
+          .lead__dot { color: var(--ink-mute); }
           .lead__head-tags { display: flex; gap: 10px; flex-wrap: wrap; }
 
           .status-tile {

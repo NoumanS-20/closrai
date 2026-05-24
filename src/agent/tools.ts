@@ -216,6 +216,13 @@ export interface ToolResult {
 
 async function enrichCompany(domain: string): Promise<CompanyEnrichment> {
   const cleaned = domain.replace(/^https?:\/\//, "").replace(/\/.*$/, "").toLowerCase();
+  if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(cleaned)) {
+    return {
+      domain: cleaned || "unknown",
+      summary: "No valid company domain was provided, so live enrichment was skipped.",
+      source: "stub",
+    };
+  }
   try {
     const url = `https://${cleaned}`;
     const res = await fetch(url, {
@@ -478,14 +485,26 @@ export async function runTool(
   const input = (rawInput ?? {}) as Record<string, unknown>;
   switch (name) {
     case "enrich_company": {
+      if (ctx.lead.enrichment) {
+        return {
+          output: {
+            skipped: true,
+            reason: "Company already enriched for this conversation.",
+            enrichment: ctx.lead.enrichment,
+          },
+        };
+      }
       const enrichment = await enrichCompany(String(input.domain ?? ""));
       return {
         output: enrichment,
-        mutate: (lead) => ({
-          ...lead,
-          companyWebsite: enrichment.domain,
-          enrichment,
-        }),
+        mutate: (lead) =>
+          enrichment.domain === "unknown"
+            ? lead
+            : {
+                ...lead,
+                companyWebsite: enrichment.domain,
+                enrichment,
+              },
       };
     }
     case "handle_objection": {

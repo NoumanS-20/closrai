@@ -326,6 +326,24 @@ export default function Home() {
           .bento__tile:first-child { grid-row: auto; }
           .bento__tile:nth-child(4) { grid-column: auto; grid-template-columns: 1fr; }
         }
+        @media (max-width: 520px) {
+          .hero {
+            padding-top: 56px;
+          }
+          .hero__title {
+            font-size: clamp(2.8rem, 14vw, 3.8rem);
+          }
+          .hero__ctas {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 28px;
+          }
+          .hero__ctas .linklike {
+            font-size: 1rem;
+          }
+        }
 
         /* FOOTER */
         .foot {

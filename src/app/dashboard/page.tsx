@@ -313,19 +313,19 @@ export default async function DashboardPage({
             text-transform: capitalize;
           }
           .persona-tag--sales {
-            color: oklch(0.42 0.14 35);
-            border-color: oklch(0.85 0.10 40);
-            background: oklch(0.97 0.04 40);
+            color: oklch(0.34 0.13 158);
+            border-color: oklch(0.80 0.09 158);
+            background: oklch(0.96 0.04 158);
           }
           .persona-tag--support {
-            color: oklch(0.42 0.14 70);
-            border-color: oklch(0.85 0.10 75);
-            background: oklch(0.97 0.04 75);
+            color: oklch(0.36 0.13 238);
+            border-color: oklch(0.80 0.08 235);
+            background: oklch(0.96 0.035 235);
           }
           .persona-tag--care {
-            color: oklch(0.42 0.12 20);
-            border-color: oklch(0.85 0.08 25);
-            background: oklch(0.97 0.04 22);
+            color: oklch(0.38 0.13 305);
+            border-color: oklch(0.80 0.08 305);
+            background: oklch(0.96 0.035 305);
           }
 
           .status {

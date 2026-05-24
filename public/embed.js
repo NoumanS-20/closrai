@@ -150,6 +150,14 @@
     setOpen(false);
   });
 
+  window.addEventListener("message", function (ev) {
+    if (ev.origin !== origin) return;
+    if (ev.source !== iframe.contentWindow) return;
+    if (ev.data && ev.data.type === "closrai:close") {
+      setOpen(false);
+    }
+  });
+
   document.addEventListener("keydown", function (ev) {
     if (ev.key === "Escape" && panel.style.display !== "none") {
       ev.preventDefault();

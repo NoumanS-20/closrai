@@ -6,19 +6,19 @@ export type OrbKind = "sales" | "support" | "care" | "plum" | "sage";
 
 const PALETTES: Record<OrbKind, { base: string; glow: string; ring: string }> = {
   sales: {
-    base: "linear-gradient(180deg, oklch(0.72 0.18 35), oklch(0.50 0.20 28))",
-    glow: "oklch(0.85 0.13 50)",
-    ring: "oklch(0.60 0.18 30)",
+    base: "linear-gradient(180deg, oklch(0.78 0.15 155), oklch(0.48 0.17 158))",
+    glow: "oklch(0.88 0.11 155)",
+    ring: "oklch(0.58 0.15 158)",
   },
   support: {
-    base: "linear-gradient(180deg, oklch(0.80 0.15 80), oklch(0.55 0.15 60))",
-    glow: "oklch(0.92 0.12 90)",
-    ring: "oklch(0.65 0.15 70)",
+    base: "linear-gradient(180deg, oklch(0.82 0.12 230), oklch(0.52 0.16 242))",
+    glow: "oklch(0.90 0.09 225)",
+    ring: "oklch(0.62 0.14 235)",
   },
   care: {
-    base: "linear-gradient(180deg, oklch(0.78 0.10 20), oklch(0.55 0.13 15))",
-    glow: "oklch(0.88 0.10 25)",
-    ring: "oklch(0.62 0.13 18)",
+    base: "linear-gradient(180deg, oklch(0.78 0.13 315), oklch(0.50 0.16 300))",
+    glow: "oklch(0.88 0.10 318)",
+    ring: "oklch(0.60 0.14 305)",
   },
   plum: {
     base: "linear-gradient(180deg, oklch(0.65 0.15 340), oklch(0.42 0.14 330))",
