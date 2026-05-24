@@ -10,19 +10,22 @@ import {
   useSyncExternalStore,
 } from "react";
 
+export type TextSize = "default" | "large" | "xlarge";
+
 export interface A11ySettings {
   highContrast: boolean;
-  largeText: boolean;
-  dyslexicFont: boolean;
-  reduceMotion: boolean;
+  textSize: TextSize;
+  dyslexia: boolean;
+  // null = follow OS prefers-reduced-motion; true/false = manual override
+  reduceMotion: boolean | null;
   underlineLinks: boolean;
 }
 
 const DEFAULTS: A11ySettings = {
   highContrast: false,
-  largeText: false,
-  dyslexicFont: false,
-  reduceMotion: false,
+  textSize: "default",
+  dyslexia: false,
+  reduceMotion: null,
   underlineLinks: false,
 };
 
@@ -30,7 +33,7 @@ const STORAGE_KEY = "closrai.a11y.v1";
 
 interface ContextValue {
   settings: A11ySettings;
-  setSetting: <K extends keyof A11ySettings>(key: K, value: A11ySettings[K]) => void;
+  set: (patch: Partial<A11ySettings>) => void;
   reset: () => void;
 }
 
@@ -39,11 +42,15 @@ const A11yContext = createContext<ContextValue | null>(null);
 function applyToHtml(settings: A11ySettings) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
-  root.dataset.a11yContrast = settings.highContrast ? "high" : "default";
-  root.dataset.a11yText = settings.largeText ? "large" : "default";
-  root.dataset.a11yFont = settings.dyslexicFont ? "dyslexic" : "default";
-  root.dataset.a11yMotion = settings.reduceMotion ? "reduce" : "default";
-  root.dataset.a11yLinks = settings.underlineLinks ? "underline" : "default";
+  root.setAttribute("data-text-size", settings.textSize);
+  root.setAttribute("data-dyslexia", settings.dyslexia ? "true" : "false");
+  root.setAttribute("data-high-contrast", settings.highContrast ? "true" : "false");
+  root.setAttribute("data-underline-links", settings.underlineLinks ? "true" : "false");
+  const osReduce =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const effective = settings.reduceMotion === null ? osReduce : settings.reduceMotion;
+  root.setAttribute("data-reduce-motion", effective ? "true" : "false");
 }
 
 // Module-level lazy-initialised store.
@@ -60,13 +67,6 @@ function readInitial(): A11ySettings {
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<A11ySettings>;
       next = { ...next, ...parsed };
-    }
-  } catch {
-    /* ignore */
-  }
-  try {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      next = { ...next, reduceMotion: true };
     }
   } catch {
     /* ignore */
@@ -111,17 +111,14 @@ function writeStore(next: A11ySettings) {
 export function A11yProvider({ children }: { children: React.ReactNode }) {
   const settings = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
-  const setSetting = useCallback(
-    <K extends keyof A11ySettings>(key: K, value: A11ySettings[K]) => {
-      writeStore({ ...(store.settings ?? DEFAULTS), [key]: value });
-    },
-    [],
-  );
+  const set = useCallback((patch: Partial<A11ySettings>) => {
+    writeStore({ ...(store.settings ?? DEFAULTS), ...patch });
+  }, []);
 
   const reset = useCallback(() => writeStore(DEFAULTS), []);
 
   return (
-    <A11yContext.Provider value={{ settings, setSetting, reset }}>
+    <A11yContext.Provider value={{ settings, set, reset }}>
       {children}
     </A11yContext.Provider>
   );
@@ -130,10 +127,9 @@ export function A11yProvider({ children }: { children: React.ReactNode }) {
 export function useA11y(): ContextValue {
   const ctx = useContext(A11yContext);
   if (!ctx) {
-    // Safe fallback so a missing provider doesn't crash a page
     return {
       settings: DEFAULTS,
-      setSetting: () => {},
+      set: () => {},
       reset: () => {},
     };
   }
@@ -141,10 +137,10 @@ export function useA11y(): ContextValue {
 }
 
 export function A11yPanelButton() {
-  const { settings, setSetting, reset } = useA11y();
+  const { settings, set, reset } = useA11y();
   const [open, setOpen] = useState(false);
-  const dialogRef = useRef<HTMLDivElement | null>(null);
-  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -152,188 +148,263 @@ export function A11yPanelButton() {
       if (e.key === "Escape") {
         e.preventDefault();
         setOpen(false);
+        btnRef.current?.focus();
+      }
+    }
+    function onClick(e: MouseEvent) {
+      const target = e.target as Node | null;
+      if (
+        target &&
+        panelRef.current &&
+        !panelRef.current.contains(target) &&
+        btnRef.current &&
+        !btnRef.current.contains(target)
+      ) {
+        setOpen(false);
       }
     }
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
-
-  useEffect(() => {
-    if (open) {
-      // Move focus into the dialog after it mounts
-      const firstFocusable =
-        dialogRef.current?.querySelector<HTMLElement>(
-          'button, [href], input, [tabindex]:not([tabindex="-1"])',
-        );
-      firstFocusable?.focus();
-    } else {
-      buttonRef.current?.focus();
-    }
+    document.addEventListener("mousedown", onClick);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onClick);
+    };
   }, [open]);
 
   return (
-    <>
+    <div style={{ position: "relative" }}>
       <button
-        ref={buttonRef}
+        ref={btnRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-label="Accessibility settings"
-        aria-expanded={open}
+        className="a11y-trigger"
         aria-haspopup="dialog"
-        className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-zinc-800 hover:border-zinc-600 bg-zinc-950 text-zinc-300 hover:text-zinc-100 transition-colors"
-        title="Accessibility settings"
+        aria-expanded={open}
+        aria-controls="a11y-panel"
+        aria-label="Accessibility settings"
+        onClick={() => setOpen((o) => !o)}
       >
         <svg
+          width="20"
+          height="20"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          width="16"
-          height="16"
           aria-hidden="true"
         >
-          <circle cx="12" cy="4" r="2" />
-          <path d="M19 13v-2a7 7 0 0 0-14 0v2" />
-          <path d="M12 15v7" />
-          <path d="M8 22h8" />
-          <path d="M9 9h6" />
+          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.7" />
+          <circle cx="12" cy="6.6" r="1.3" fill="currentColor" />
+          <path
+            d="M7 9.5h10M12 10.5v3m0 0l-2.5 5M12 13.5l2.5 5"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+          />
         </svg>
+        <span>Accessibility</span>
       </button>
-
       {open && (
         <div
-          className="fixed inset-0 z-[2147483646] flex items-end sm:items-center justify-center p-4 bg-zinc-950/70 backdrop-blur"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setOpen(false);
-          }}
+          ref={panelRef}
+          id="a11y-panel"
+          role="dialog"
+          aria-label="Accessibility settings"
+          className="a11y-panel"
         >
-          <div
-            ref={dialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="a11y-dialog-title"
-            className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-5 space-y-4 shadow-2xl"
-          >
-            <div className="flex items-center justify-between">
-              <h2
-                id="a11y-dialog-title"
-                className="text-lg font-semibold text-zinc-100"
-              >
-                Accessibility
-              </h2>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Close accessibility settings"
-                className="text-zinc-400 hover:text-zinc-100 w-8 h-8 rounded-lg border border-zinc-800 hover:border-zinc-600"
-              >
-                ×
-              </button>
-            </div>
+          <div className="a11y-panel__head">
+            <strong>Accessibility</strong>
+            <button
+              type="button"
+              aria-label="Close accessibility settings"
+              onClick={() => {
+                setOpen(false);
+                btnRef.current?.focus();
+              }}
+              className="a11y-panel__close"
+            >
+              ✕
+            </button>
+          </div>
 
-            <p className="text-sm text-zinc-400">
-              These settings persist on this device. They follow{" "}
-              <code className="text-emerald-300">prefers-reduced-motion</code>{" "}
-              automatically if your OS asks.
-            </p>
+          <Row label="High contrast" hint="Boost color contrast site-wide">
+            <Switch
+              id="a11y-contrast"
+              checked={settings.highContrast}
+              onClick={() => set({ highContrast: !settings.highContrast })}
+            />
+          </Row>
 
-            <div className="space-y-2">
-              <Toggle
-                id="a11y-contrast"
-                label="High contrast"
-                description="Boost background and text contrast for low-vision readability."
-                checked={settings.highContrast}
-                onChange={(v) => setSetting("highContrast", v)}
-              />
-              <Toggle
-                id="a11y-text"
-                label="Larger text"
-                description="Bumps base font size to 18px (default is 16px)."
-                checked={settings.largeText}
-                onChange={(v) => setSetting("largeText", v)}
-              />
-              <Toggle
-                id="a11y-font"
-                label="Dyslexia-friendly font"
-                description="Switches body text to a dyslexia-optimized font stack."
-                checked={settings.dyslexicFont}
-                onChange={(v) => setSetting("dyslexicFont", v)}
-              />
-              <Toggle
-                id="a11y-motion"
-                label="Reduce motion"
-                description="Disables animations and transitions site-wide."
-                checked={settings.reduceMotion}
-                onChange={(v) => setSetting("reduceMotion", v)}
-              />
-              <Toggle
-                id="a11y-links"
-                label="Always underline links"
-                description="Adds explicit underlines to all link text."
-                checked={settings.underlineLinks}
-                onChange={(v) => setSetting("underlineLinks", v)}
-              />
-            </div>
-
-            <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
-              <button
-                type="button"
-                onClick={reset}
-                className="text-xs text-zinc-400 hover:text-zinc-200"
-              >
-                Reset to defaults
-              </button>
-              <a
-                href="/accessibility"
-                className="text-xs text-emerald-300 hover:text-emerald-200"
-              >
-                Read our a11y commitments →
-              </a>
+          <div className="a11y-row">
+            <span className="a11y-row__label">
+              <span>Text size</span>
+              <span className="a11y-row__hint">Adjust base font scaling</span>
+            </span>
+            <div className="a11y-seg" role="radiogroup" aria-label="Text size">
+              {(["default", "large", "xlarge"] as TextSize[]).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  role="radio"
+                  aria-checked={settings.textSize === s}
+                  className={"a11y-seg__btn" + (settings.textSize === s ? " is-on" : "")}
+                  onClick={() => set({ textSize: s })}
+                >
+                  {s === "default" ? "A" : s === "large" ? "A+" : "A++"}
+                </button>
+              ))}
             </div>
           </div>
+
+          <Row label="Dyslexia-friendly font" hint="Atkinson Hyperlegible">
+            <Switch
+              id="a11y-dys"
+              checked={settings.dyslexia}
+              onClick={() => set({ dyslexia: !settings.dyslexia })}
+            />
+          </Row>
+
+          <Row
+            label="Reduce motion"
+            hint={
+              settings.reduceMotion === null
+                ? "Following OS preference"
+                : "Manual override"
+            }
+          >
+            <Switch
+              id="a11y-motion"
+              checked={settings.reduceMotion === true}
+              onClick={() =>
+                set({
+                  reduceMotion: settings.reduceMotion === true ? false : true,
+                })
+              }
+            />
+          </Row>
+
+          <Row label="Underline links" hint="Always show link underlines">
+            <Switch
+              id="a11y-underline"
+              checked={settings.underlineLinks}
+              onClick={() => set({ underlineLinks: !settings.underlineLinks })}
+            />
+          </Row>
+
+          <button type="button" className="a11y-reset" onClick={reset}>
+            Reset to defaults
+          </button>
+
+          <style>{`
+            .a11y-panel {
+              position: absolute;
+              right: 0;
+              top: calc(100% + 10px);
+              width: 340px;
+              background: var(--surface);
+              border: 1px solid var(--line);
+              border-radius: var(--radius-lg);
+              box-shadow: var(--shadow-lift);
+              padding: 18px;
+              z-index: 1000;
+            }
+            .a11y-panel__head {
+              display: flex; justify-content: space-between; align-items: center;
+              margin-bottom: 14px;
+            }
+            .a11y-panel__head strong {
+              font-family: var(--font-display); font-size: 1.15rem;
+            }
+            .a11y-panel__close {
+              width: 28px; height: 28px; border-radius: 50%;
+              background: var(--surface-2); border: 1px solid var(--line);
+              cursor: pointer; color: var(--ink-soft);
+            }
+            .a11y-row {
+              display: flex; align-items: center; justify-content: space-between;
+              padding: 10px 0;
+              border-top: 1px solid var(--line-soft);
+              gap: 12px;
+            }
+            .a11y-row:first-of-type { border-top: 0; }
+            .a11y-row__label { display: flex; flex-direction: column; gap: 2px; font-size: 0.92rem; font-weight: 500; cursor: pointer; }
+            .a11y-row__hint { font-size: 0.75rem; color: var(--ink-mute); font-weight: 400; }
+            .a11y-switch {
+              width: 44px; height: 26px; border-radius: 999px;
+              background: var(--line); border: 0; cursor: pointer;
+              position: relative; transition: background var(--dur-fast) var(--ease);
+              flex-shrink: 0;
+            }
+            .a11y-switch span {
+              position: absolute; top: 3px; left: 3px;
+              width: 20px; height: 20px; border-radius: 50%;
+              background: var(--surface);
+              box-shadow: 0 2px 4px rgba(0,0,0,.2);
+              transition: left var(--dur-fast) var(--ease);
+            }
+            .a11y-switch.is-on { background: var(--terracotta); }
+            .a11y-switch.is-on span { left: 21px; }
+            .a11y-seg {
+              display: flex; gap: 4px;
+              background: var(--surface-2); padding: 3px; border-radius: var(--radius-pill);
+              border: 1px solid var(--line);
+            }
+            .a11y-seg__btn {
+              padding: 4px 10px; border: 0; background: transparent;
+              border-radius: var(--radius-pill); cursor: pointer; font-weight: 600;
+              color: var(--ink-soft);
+            }
+            .a11y-seg__btn.is-on { background: var(--ink); color: var(--surface); }
+            .a11y-reset {
+              margin-top: 10px; width: 100%;
+              padding: 9px; border-radius: var(--radius-md);
+              background: transparent; border: 1px dashed var(--line);
+              color: var(--ink-soft); cursor: pointer; font-size: 0.85rem;
+            }
+            .a11y-reset:hover { background: var(--surface-2); color: var(--ink); }
+          `}</style>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
-function Toggle({
-  id,
+function Row({
   label,
-  description,
-  checked,
-  onChange,
+  hint,
+  children,
 }: {
-  id: string;
   label: string;
-  description: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
+  hint: string;
+  children: React.ReactNode;
 }) {
   return (
-    <label
-      htmlFor={id}
-      className="flex items-start justify-between gap-3 rounded-xl border border-zinc-800 p-3 cursor-pointer hover:bg-zinc-900/50 transition-colors"
-    >
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-zinc-100">{label}</div>
-        <div className="text-xs text-zinc-400 mt-0.5">{description}</div>
-      </div>
-      <input
-        id={id}
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="sr-only peer"
-      />
-      <span
-        aria-hidden="true"
-        className="relative shrink-0 w-10 h-6 rounded-full bg-zinc-800 peer-checked:bg-emerald-500/80 transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-zinc-950 peer-focus-visible:ring-emerald-400"
-      >
-        <span className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-zinc-950 shadow transition-transform peer-checked:translate-x-4" />
+    <div className="a11y-row">
+      <span className="a11y-row__label">
+        <span>{label}</span>
+        <span className="a11y-row__hint">{hint}</span>
       </span>
-    </label>
+      {children}
+    </div>
+  );
+}
+
+function Switch({
+  id,
+  checked,
+  onClick,
+}: {
+  id: string;
+  checked: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      id={id}
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      className={"a11y-switch" + (checked ? " is-on" : "")}
+      onClick={onClick}
+    >
+      <span />
+    </button>
   );
 }
