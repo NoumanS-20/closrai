@@ -43,3 +43,8 @@ next-env.d.ts
 # ClosrAI runtime data
 /data/leads.json
 .env.local
+
+# Smoke-test scratch files
+.t*.json
+.tmp*.json
+.tmp_*
