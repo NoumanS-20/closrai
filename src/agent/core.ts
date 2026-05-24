@@ -26,16 +26,35 @@ function salvageToolCallsFromError(err: unknown): SalvagedToolCall[] {
       ? String((err as { message: unknown }).message ?? "")
       : String(err);
   if (!text.includes("tool_use_failed") && !text.includes("<function=")) return [];
-  const match = text.match(/<function=([a-z_]+)(\{[\s\S]*?\})<\/?function>?/);
-  if (!match) return [];
-  const [, name, args] = match;
-  return [
-    {
-      id: `salvaged_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
-      name,
-      arguments: args,
-    },
+
+  // Llama-on-Groq emits at least two surface forms when it fails to call a tool:
+  //   1) <function=name{json}</function>
+  //   2) <function=name>{json}</function>   (with name->args separator and/or no closing tag)
+  // We try both. JSON args may also be escape-encoded inside the error payload,
+  // so we unescape backslash-escaped quotes / backslashes before parsing.
+  const candidates = [
+    /<function=([a-z_]+)\s*\{([\s\S]*?)\}\s*<\/?function>?/i, // form 1
+    /<function=([a-z_]+)>\s*\{([\s\S]*?)\}\s*<\/?function>?/i, // form 2
   ];
+  for (const re of candidates) {
+    const m = text.match(re);
+    if (!m) continue;
+    const [, name, body] = m;
+    let argsJson = "{" + body + "}";
+    // The args may have been double-escaped when wrapped inside the error JSON
+    // (e.g. \\" instead of "). Strip one level of escaping.
+    if (argsJson.includes('\\"')) {
+      argsJson = argsJson.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+    }
+    return [
+      {
+        id: `salvaged_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+        name,
+        arguments: argsJson,
+      },
+    ];
+  }
+  return [];
 }
 
 function toApiMessages(history: ChatMessage[]): GroqMessage[] {
