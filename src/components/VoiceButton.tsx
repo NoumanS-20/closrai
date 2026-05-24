@@ -136,35 +136,68 @@ export function VoiceButton({
   };
 
   return (
-    <button
-      type="button"
-      onClick={toggleListen}
-      disabled={disabled}
-      title={listening ? "Stop listening" : "Speak to the bot"}
-      className={`relative h-9 w-9 shrink-0 inline-flex items-center justify-center rounded-xl border bg-zinc-900 disabled:opacity-40 transition-colors ${ACCENT_CLASSES[accent]}`}
-    >
-      {listening ? (
-        <span className="absolute inset-0 rounded-xl border border-current animate-ping" />
-      ) : null}
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="w-4 h-4"
+    <>
+      <button
+        type="button"
+        onClick={toggleListen}
+        disabled={disabled}
+        aria-pressed={listening}
+        aria-label={
+          listening
+            ? "Stop listening (voice input on)"
+            : "Start voice input"
+        }
+        title={listening ? "Stop listening" : "Speak to the bot"}
+        className={`relative h-9 w-9 shrink-0 inline-flex items-center justify-center rounded-xl border bg-zinc-900 disabled:opacity-40 transition-colors ${ACCENT_CLASSES[accent]}`}
       >
-        <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
-        <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
-        <path d="M12 18v4" />
-        <path d="M8 22h8" />
-      </svg>
-      {speaking && (
-        <span className="absolute -bottom-1 -right-1 text-[8px] bg-zinc-950 px-1 rounded-full">
-          🔊
-        </span>
+        {listening ? (
+          <span
+            aria-hidden="true"
+            className="absolute inset-0 rounded-xl border border-current animate-ping"
+          />
+        ) : null}
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="w-4 h-4"
+          aria-hidden="true"
+        >
+          <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+          <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+          <path d="M12 18v4" />
+          <path d="M8 22h8" />
+        </svg>
+        {speaking && (
+          <span
+            aria-hidden="true"
+            className="absolute -bottom-1 -right-1 text-[8px] bg-zinc-950 px-1 rounded-full"
+          >
+            🔊
+          </span>
+        )}
+      </button>
+      {/* Visible caption + screen-reader announcement when bot is speaking */}
+      {speaking && speakingText && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed left-1/2 -translate-x-1/2 bottom-4 z-[2147483646] max-w-[90vw] sm:max-w-xl px-4 py-2 rounded-xl bg-zinc-900/95 border border-zinc-700 text-zinc-100 text-sm shadow-2xl backdrop-blur"
+        >
+          <div className="flex items-start gap-2">
+            <span aria-hidden="true" className="mt-0.5">🔊</span>
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-zinc-400 mb-0.5">
+                Reading aloud
+              </div>
+              <div className="leading-snug">{speakingText}</div>
+            </div>
+          </div>
+        </div>
       )}
-    </button>
+    </>
   );
 }

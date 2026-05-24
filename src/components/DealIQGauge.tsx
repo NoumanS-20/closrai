@@ -14,17 +14,37 @@ function color(total: number): string {
   return "text-zinc-500";
 }
 
-function bar(label: string, value: number) {
+function tier(total: number): string {
+  if (total >= 75) return "hot";
+  if (total >= 50) return "warm";
+  if (total >= 25) return "cool";
+  return "cold";
+}
+
+function Bar({ label, value }: { label: string; value: number }) {
+  const v = Math.max(0, Math.min(100, value));
   return (
     <div className="flex items-center gap-2 text-xs">
-      <span className="w-16 text-zinc-400">{label}</span>
-      <div className="flex-1 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+      <span className="w-16 text-zinc-400" id={`bar-label-${label.toLowerCase().replace(/\s+/g, "-")}`}>
+        {label}
+      </span>
+      <div
+        className="flex-1 h-1.5 rounded-full bg-zinc-800 overflow-hidden"
+        role="progressbar"
+        aria-labelledby={`bar-label-${label.toLowerCase().replace(/\s+/g, "-")}`}
+        aria-valuenow={v}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuetext={`${v} out of 100`}
+      >
         <div
           className="h-full bg-gradient-to-r from-emerald-500 to-sky-400 transition-all duration-500"
-          style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+          style={{ width: `${v}%` }}
         />
       </div>
-      <span className="w-7 text-right text-zinc-300 tabular-nums">{value}</span>
+      <span className="w-7 text-right text-zinc-300 tabular-nums" aria-hidden="true">
+        {v}
+      </span>
     </div>
   );
 }
@@ -37,10 +57,23 @@ export function DealIQGauge({ iq, compact }: Props) {
   const circ = 2 * Math.PI * radius;
   const offset = circ - (total / 100) * circ;
 
+  const summary = iq
+    ? `Score ${total} out of 100, ${tier(total)} lead. ${iq.rationale ?? ""}`
+    : "Score not yet available.";
+
   return (
-    <div className={compact ? "flex items-center gap-3" : "space-y-3"}>
-      <div className="relative" style={{ width: ringSize, height: ringSize }}>
-        <svg width={ringSize} height={ringSize} className="-rotate-90">
+    <div
+      className={compact ? "flex items-center gap-3" : "space-y-3"}
+      role="group"
+      aria-label="Lead score breakdown"
+    >
+      <div
+        className="relative"
+        style={{ width: ringSize, height: ringSize }}
+        role="img"
+        aria-label={`Score ${total} out of 100`}
+      >
+        <svg width={ringSize} height={ringSize} className="-rotate-90" aria-hidden="true">
           <circle
             cx={ringSize / 2}
             cy={ringSize / 2}
@@ -68,25 +101,35 @@ export function DealIQGauge({ iq, compact }: Props) {
             </linearGradient>
           </defs>
         </svg>
-        <div className={`absolute inset-0 flex items-center justify-center ${color(total)} font-semibold ${compact ? "text-base" : "text-2xl"}`}>
+        <div
+          aria-hidden="true"
+          className={`absolute inset-0 flex items-center justify-center ${color(total)} font-semibold ${compact ? "text-base" : "text-2xl"}`}
+        >
           {total}
         </div>
       </div>
 
+      {/* Always-present, sr-only live summary for screen readers */}
+      <p className="sr-only" aria-live="polite">
+        {summary}
+      </p>
+
       {!compact && (
         <div className="space-y-1.5">
-          {bar("Need", iq?.need ?? 0)}
-          {bar("Intent", iq?.intent ?? 0)}
-          {bar("ICP Fit", iq?.icpFit ?? 0)}
-          {bar("Authority", iq?.authority ?? 0)}
-          {bar("Timing", iq?.timing ?? 0)}
-          {bar("Budget", iq?.budget ?? 0)}
-          {bar("Sentiment", iq?.sentiment ?? 0)}
+          <Bar label="Need" value={iq?.need ?? 0} />
+          <Bar label="Intent" value={iq?.intent ?? 0} />
+          <Bar label="ICP Fit" value={iq?.icpFit ?? 0} />
+          <Bar label="Authority" value={iq?.authority ?? 0} />
+          <Bar label="Timing" value={iq?.timing ?? 0} />
+          <Bar label="Budget" value={iq?.budget ?? 0} />
+          <Bar label="Sentiment" value={iq?.sentiment ?? 0} />
         </div>
       )}
 
       {!compact && iq?.rationale && (
-        <p className="text-xs text-zinc-400 italic leading-snug">{iq.rationale}</p>
+        <p className="text-xs text-zinc-400 italic leading-snug" aria-hidden="true">
+          {iq.rationale}
+        </p>
       )}
     </div>
   );

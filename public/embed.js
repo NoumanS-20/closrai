@@ -39,7 +39,10 @@
   var theme = THEME[persona];
 
   var launcher = document.createElement("button");
+  launcher.setAttribute("type", "button");
   launcher.setAttribute("aria-label", "Open ClosrAI chat");
+  launcher.setAttribute("aria-expanded", "false");
+  launcher.setAttribute("aria-haspopup", "dialog");
   launcher.style.cssText = [
     "position:fixed",
     "right:20px",
@@ -70,6 +73,9 @@
   });
 
   var panel = document.createElement("div");
+  panel.setAttribute("role", "dialog");
+  panel.setAttribute("aria-label", "ClosrAI chat window");
+  panel.setAttribute("aria-modal", "false");
   panel.style.cssText = [
     "position:fixed",
     "right:20px",
@@ -115,13 +121,40 @@
     "z-index:2",
   ].join(";");
   closeBtn.textContent = "×";
-  closeBtn.addEventListener("click", function () {
-    panel.style.display = "none";
-  });
   panel.appendChild(closeBtn);
 
+  function setOpen(open) {
+    panel.style.display = open ? "block" : "none";
+    launcher.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) {
+      // Move focus into the iframe so keyboard users land in the chat
+      try {
+        iframe.focus();
+      } catch {
+        /* noop */
+      }
+    } else {
+      try {
+        launcher.focus();
+      } catch {
+        /* noop */
+      }
+    }
+  }
+
   launcher.addEventListener("click", function () {
-    panel.style.display = panel.style.display === "none" ? "block" : "none";
+    setOpen(panel.style.display === "none");
+  });
+
+  closeBtn.addEventListener("click", function () {
+    setOpen(false);
+  });
+
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape" && panel.style.display !== "none") {
+      ev.preventDefault();
+      setOpen(false);
+    }
   });
 
   function mount() {

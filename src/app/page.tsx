@@ -142,6 +142,10 @@ export default function Home() {
             title="Unified founder console"
             body="One dashboard. Filter by Sales / Support / Care. See every transcript, every internal debate trace, every auto-drafted follow-up email, every escalation ticket — across all three bots — in one place."
           />
+          <Feature
+            title="Accessibility, not as afterthought"
+            body="Built-in display settings panel (high contrast, larger text, dyslexia font, reduced motion, underline links). Skip-to-content link, ARIA-labelled live chat region, role=progressbar IQ gauge, visible TTS captions for Deaf users, full keyboard nav. See /accessibility."
+          />
         </div>
       </section>
 
@@ -213,14 +217,20 @@ Agent runtime (src/agent/)
 
       <footer className="max-w-6xl mx-auto px-6 py-10 border-t border-zinc-900 text-xs text-zinc-500 flex flex-wrap items-center justify-between gap-3">
         <div>ClosrAI Platform · FlowZint AI Hackathon 2026 · Open Innovation</div>
-        <div className="flex gap-4">
+        <nav aria-label="Footer" className="flex gap-4">
           <Link href="/chat" className="hover:text-zinc-300">
             Bot picker
           </Link>
           <Link href="/dashboard" className="hover:text-zinc-300">
             Dashboard
           </Link>
-        </div>
+          <Link href="/embed-demo" className="hover:text-zinc-300">
+            Embed demo
+          </Link>
+          <Link href="/accessibility" className="hover:text-zinc-300">
+            Accessibility
+          </Link>
+        </nav>
       </footer>
     </main>
   );

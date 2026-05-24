@@ -36,11 +36,13 @@ function statusBadge(status: string) {
     disqualified: "bg-rose-500/10 text-rose-300 border-rose-500/30",
   };
   const cls = map[status] ?? map.new;
+  const labelText = status.replace(/_/g, " ");
   return (
     <span
       className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border ${cls}`}
     >
-      {status.replace(/_/g, " ")}
+      <span className="sr-only">Status: </span>
+      {labelText}
     </span>
   );
 }
@@ -51,6 +53,7 @@ function personaBadge(personaId: PersonaId) {
     <span
       className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border ${meta.tagBg} ${meta.tagText} ${meta.tagBorder}`}
     >
+      <span className="sr-only">Persona: </span>
       {meta.label}
     </span>
   );
@@ -114,14 +117,14 @@ export default async function DashboardPage({
           </div>
         </header>
 
-        <div className="flex gap-2 flex-wrap">
+        <nav aria-label="Filter leads by persona" className="flex gap-2 flex-wrap">
           <FilterPill href="/dashboard" label={`All · ${counts.all}`} active={!personaFilter} />
           <FilterPill href="/dashboard?persona=sales" label={`Sales · ${counts.sales}`} active={personaFilter === "sales"} accent="emerald" />
           <FilterPill href="/dashboard?persona=support" label={`Support · ${counts.support}`} active={personaFilter === "support"} accent="sky" />
           <FilterPill href="/dashboard?persona=care" label={`Care · ${counts.care}`} active={personaFilter === "care"} accent="violet" />
-        </div>
+        </nav>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" role="group" aria-label="Pipeline summary">
           <Stat label="Total" value={leads.length} />
           <Stat label="Qualified / resolved" value={qualified} accent="emerald" />
           <Stat label="Meetings booked" value={booked} accent="sky" />
@@ -130,6 +133,9 @@ export default async function DashboardPage({
 
         <div className="rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden">
           <table className="w-full text-sm">
+            <caption className="sr-only">
+              Leads {personaFilter ? `filtered to ${personaFilter} persona` : "across all personas"}, sorted by most recently updated.
+            </caption>
             <thead className="bg-zinc-900/50 text-zinc-400 text-xs uppercase tracking-wider">
               <tr>
                 <th className="text-left px-4 py-2.5">Lead</th>
@@ -244,8 +250,10 @@ function FilterPill({
   return (
     <Link
       href={href}
+      aria-current={active ? "page" : undefined}
       className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${baseColor}`}
     >
+      {active && <span className="sr-only">Current filter: </span>}
       {label}
     </Link>
   );
