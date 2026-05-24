@@ -47,6 +47,67 @@ function subscribeNoop(): () => void {
   return () => {};
 }
 
+/**
+ * Pick the smoothest, most welcoming-sounding voice available on the device.
+ *
+ * Order of preference:
+ *   1. Modern neural/online voices (Google "online", Microsoft "Natural", etc.)
+ *      — these are dramatically more natural than the default offline voices.
+ *   2. Known-good named voices ("Samantha" on macOS/iOS is the friendliest stock voice;
+ *      "Google US English" on Chrome desktop is the second-best).
+ *   3. Any en-US/en-IN female voice (generally friendlier-sounding default).
+ *   4. Any en-* voice as fallback.
+ *   5. Whatever the browser gives us.
+ *
+ * We avoid the default Microsoft David / Zira / Mark on Windows because they
+ * sound robotic — but if those are all that's available, that's what we use.
+ */
+function pickFriendlyVoice(
+  voices: SpeechSynthesisVoice[],
+): SpeechSynthesisVoice | undefined {
+  if (voices.length === 0) return undefined;
+  const en = voices.filter((v) => v.lang.toLowerCase().startsWith("en"));
+  const pool = en.length > 0 ? en : voices;
+
+  const scored = pool
+    .map((v) => ({ voice: v, score: scoreVoice(v) }))
+    .sort((a, b) => b.score - a.score);
+
+  return scored[0]?.voice;
+}
+
+function scoreVoice(v: SpeechSynthesisVoice): number {
+  const name = v.name.toLowerCase();
+  let score = 0;
+
+  // Strong positive signals: neural / online voices
+  if (/natural|neural|online|wavenet|premium|enhanced/.test(name)) score += 100;
+
+  // Modern Google / Microsoft online voices
+  if (/google/.test(name) && /(en-us|english)/i.test(name + " " + v.lang)) score += 60;
+  if (/microsoft.*(?:aria|jenny|guy|ana|libby|natasha)/.test(name)) score += 80;
+
+  // Named-good stock voices
+  if (/samantha|karen|moira|tessa|fiona|allison|ava/.test(name)) score += 70;
+
+  // Friendlier-sounding female-coded voices by default
+  if (/female|woman|girl/.test(name)) score += 20;
+
+  // Locale boosts (prefer en-US then en-IN for Indian hackathon context)
+  if (v.lang.toLowerCase() === "en-us") score += 15;
+  if (v.lang.toLowerCase() === "en-in") score += 12;
+  if (v.lang.toLowerCase() === "en-gb") score += 10;
+
+  // Demote the robotic Windows defaults — they sound metallic
+  if (/david|mark|zira|hazel/.test(name)) score -= 30;
+
+  // Default voice gets a small boost so we don't override the user's OS choice
+  // when nothing else stands out
+  if (v.default) score += 3;
+
+  return score;
+}
+
 export function VoiceButton({
   onTranscript,
   speakingText,
@@ -108,15 +169,38 @@ export function VoiceButton({
     lastSpokenRef.current = speakingText;
     const synth = window.speechSynthesis;
     if (!synth) return;
-    synth.cancel();
-    const utter = new SpeechSynthesisUtterance(speakingText);
-    utter.lang = "en-IN";
-    utter.rate = 1.05;
-    utter.pitch = 1;
-    utter.onstart = () => setSpeaking(true);
-    utter.onend = () => setSpeaking(false);
-    utter.onerror = () => setSpeaking(false);
-    synth.speak(utter);
+
+    const speak = () => {
+      synth.cancel();
+      const utter = new SpeechSynthesisUtterance(speakingText);
+      const voice = pickFriendlyVoice(synth.getVoices());
+      if (voice) {
+        utter.voice = voice;
+        utter.lang = voice.lang;
+      } else {
+        utter.lang = "en-US";
+      }
+      utter.rate = 0.96;
+      utter.pitch = 1.05;
+      utter.volume = 1;
+      utter.onstart = () => setSpeaking(true);
+      utter.onend = () => setSpeaking(false);
+      utter.onerror = () => setSpeaking(false);
+      synth.speak(utter);
+    };
+
+    // Voices may load async on Chrome — wait one tick if the list is empty.
+    if (synth.getVoices().length > 0) {
+      speak();
+    } else {
+      const handler = () => {
+        synth.removeEventListener("voiceschanged", handler);
+        speak();
+      };
+      synth.addEventListener("voiceschanged", handler);
+      // Fallback in case the event never fires
+      setTimeout(speak, 300);
+    }
   }, [speakingText]);
 
   if (!supported) return null;
@@ -180,22 +264,11 @@ export function VoiceButton({
           </span>
         )}
       </button>
-      {/* Visible caption + screen-reader announcement when bot is speaking */}
+      {/* Screen-reader-only announcement — the visible text is already in the
+          chat bubble above the input, so we don't duplicate it on screen. */}
       {speaking && speakingText && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed left-1/2 -translate-x-1/2 bottom-4 z-[2147483646] max-w-[90vw] sm:max-w-xl px-4 py-2 rounded-xl bg-zinc-900/95 border border-zinc-700 text-zinc-100 text-sm shadow-2xl backdrop-blur"
-        >
-          <div className="flex items-start gap-2">
-            <span aria-hidden="true" className="mt-0.5">🔊</span>
-            <div>
-              <div className="text-[10px] uppercase tracking-wider text-zinc-400 mb-0.5">
-                Reading aloud
-              </div>
-              <div className="leading-snug">{speakingText}</div>
-            </div>
-          </div>
+        <div role="status" aria-live="polite" className="sr-only">
+          Reading aloud: {speakingText}
         </div>
       )}
     </>
