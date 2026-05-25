@@ -202,6 +202,49 @@ function safeSpeechText(text: string): string {
   return SANITIZER_BROKEN ? text : sanitizeForSpeech(text);
 }
 
+type VoiceStatus = "idle" | "listening" | "speaking" | "network-error";
+
+interface BuildRecognitionDeps {
+  Ctor: SpeechCtor;
+  onTranscriptRef: React.RefObject<(text: string) => void>;
+  onStatus: (s: VoiceStatus | ((prev: VoiceStatus) => VoiceStatus)) => void;
+  rebuild: () => void;
+}
+
+function buildRecognition(deps: BuildRecognitionDeps): BrowserSpeechRecognition {
+  const { Ctor, onTranscriptRef, onStatus, rebuild } = deps;
+  const rec = new Ctor();
+  rec.continuous = false;
+  rec.interimResults = false;
+  rec.lang = "en-IN";
+  rec.onresult = (ev) => {
+    const transcript = Array.from(
+      { length: ev.results.length },
+      (_, i) => ev.results[i][0].transcript,
+    ).join(" ");
+    if (transcript.trim().length > 0) {
+      onTranscriptRef.current?.(transcript.trim());
+    }
+  };
+  rec.onerror = (ev) => {
+    console.warn("[voice] recognition error", ev.error);
+    if (ev.error === "network") {
+      onStatus("network-error");
+    } else {
+      onStatus("idle");
+    }
+    try {
+      rec.abort();
+    } catch {
+      /* noop */
+    }
+    // Force-rebuild so the next click starts from a clean instance.
+    rebuild();
+  };
+  rec.onend = () => onStatus((prev) => (prev === "listening" ? "idle" : prev));
+  return rec;
+}
+
 export function VoiceButton({ onTranscript, speakingText, disabled }: Props) {
   const supported = useSyncExternalStore(
     subscribeNoop,
@@ -209,8 +252,7 @@ export function VoiceButton({ onTranscript, speakingText, disabled }: Props) {
     () => false,
   );
 
-  const [listening, setListening] = useState(false);
-  const [speaking, setSpeaking] = useState(false);
+  const [status, setStatus] = useState<VoiceStatus>("idle");
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const lastSpokenRef = useRef<string | null>(null);
   const onTranscriptRef = useRef(onTranscript);
@@ -223,28 +265,19 @@ export function VoiceButton({ onTranscript, speakingText, disabled }: Props) {
     if (!supported) return;
     const Ctor = getSpeechCtor();
     if (!Ctor) return;
-    const rec = new Ctor();
-    rec.continuous = false;
-    rec.interimResults = false;
-    rec.lang = "en-IN";
-    rec.onresult = (ev) => {
-      const transcript = Array.from(
-        { length: ev.results.length },
-        (_, i) => ev.results[i][0].transcript,
-      ).join(" ");
-      if (transcript.trim().length > 0) {
-        onTranscriptRef.current(transcript.trim());
-      }
+    const rebuild = () => {
+      const fresh = buildRecognition({
+        Ctor,
+        onTranscriptRef,
+        onStatus: setStatus,
+        rebuild,
+      });
+      recognitionRef.current = fresh;
     };
-    rec.onerror = (ev) => {
-      console.warn("[voice] recognition error", ev.error);
-      setListening(false);
-    };
-    rec.onend = () => setListening(false);
-    recognitionRef.current = rec;
+    rebuild();
     return () => {
       try {
-        rec.abort();
+        recognitionRef.current?.abort();
       } catch {
         /* noop */
       }
@@ -252,21 +285,27 @@ export function VoiceButton({ onTranscript, speakingText, disabled }: Props) {
     };
   }, [supported]);
 
+  // TTS — speak each new assistant message exactly once.
   useEffect(() => {
     if (typeof window === "undefined" || !speakingText) return;
     if (lastSpokenRef.current === speakingText) return;
     lastSpokenRef.current = speakingText;
+
     const synth = window.speechSynthesis;
     if (!synth) return;
 
-    // safeSpeechText falls back to identity if the sanitizer self-test failed —
-    // we never want to leave voice silent because emoji-stripping went wrong.
     const cleaned = safeSpeechText(speakingText);
-    if (!cleaned) return;
-
-    synth.cancel();
+    if (!cleaned) {
+      console.warn("[voice] sanitized text was empty, not speaking");
+      return;
+    }
 
     const speak = () => {
+      try {
+        synth.cancel();
+      } catch {
+        /* noop */
+      }
       const utter = new SpeechSynthesisUtterance(cleaned);
       const voice = pickVoice();
       if (voice) {
@@ -275,44 +314,89 @@ export function VoiceButton({ onTranscript, speakingText, disabled }: Props) {
       } else {
         utter.lang = "en-IN";
       }
-      // Steady, unhurried delivery. Rate down a touch + neutral pitch makes
-      // a big difference on the cheaper voices' pronunciation.
       utter.rate = 0.92;
       utter.pitch = 1.0;
       utter.volume = 1;
-      utter.onstart = () => setSpeaking(true);
-      utter.onend = () => setSpeaking(false);
-      utter.onerror = () => setSpeaking(false);
+      utter.onstart = () => setStatus("speaking");
+      utter.onend = () =>
+        setStatus((prev) => (prev === "speaking" ? "idle" : prev) as VoiceStatus);
+      utter.onerror = (e) => {
+        console.warn("[voice] utterance error", e);
+        setStatus((prev) => (prev === "speaking" ? "idle" : prev) as VoiceStatus);
+      };
       synth.speak(utter);
     };
 
-    // Some browsers populate the voices list asynchronously the first time
-    if (synth.getVoices().length === 0) {
-      const handler = () => {
-        synth.removeEventListener?.("voiceschanged", handler);
-        speak();
-      };
-      synth.addEventListener?.("voiceschanged", handler);
-      // safety: fire anyway in case the event never fires
-      setTimeout(speak, 250);
-    } else {
+    if (synth.getVoices().length > 0) {
       speak();
+      return;
     }
+    // Voices list not ready yet — wait once for the event, then speak.
+    let fired = false;
+    const handler = () => {
+      if (fired) return;
+      fired = true;
+      synth.removeEventListener?.("voiceschanged", handler);
+      speak();
+    };
+    synth.addEventListener?.("voiceschanged", handler);
   }, [speakingText]);
 
   if (!supported) return null;
 
+  const listening = status === "listening";
+  const speaking = status === "speaking";
+  const errored = status === "network-error";
+
   const toggleListen = () => {
+    if (errored) {
+      // Clear the error state on next click; user can try again.
+      setStatus("idle");
+    }
     if (listening) {
-      recognitionRef.current?.stop();
-      setListening(false);
+      try {
+        recognitionRef.current?.stop();
+      } catch {
+        /* noop */
+      }
+      setStatus("idle");
       return;
     }
+    const rec = recognitionRef.current;
+    if (!rec) return;
     try {
-      recognitionRef.current?.start();
-      setListening(true);
+      rec.start();
+      setStatus("listening");
     } catch (err) {
-      console.warn("[voice] failed to start recognition", err);
+      // "already started" — abort, rebuild a fresh recognition object, retry once.
+      console.warn("[voice] start failed, rebuilding", err);
+      try {
+        rec.abort();
+      } catch {
+        /* noop */
+      }
+      const Ctor = getSpeechCtor();
+      if (!Ctor) {
+        setStatus("idle");
+        return;
+      }
+      const localRebuild = () => {
+        const next = buildRecognition({
+          Ctor,
+          onTranscriptRef,
+          onStatus: setStatus,
+          rebuild: localRebuild,
+        });
+        recognitionRef.current = next;
+      };
+      localRebuild();
+      try {
+        recognitionRef.current?.start();
+        setStatus("listening");
+      } catch (err2) {
+        console.warn("[voice] rebuild + start still failed", err2);
+        setStatus("idle");
+      }
     }
   };
 
@@ -323,9 +407,26 @@ export function VoiceButton({ onTranscript, speakingText, disabled }: Props) {
         onClick={toggleListen}
         disabled={disabled}
         aria-pressed={listening}
-        aria-label={listening ? "Stop listening (voice input on)" : "Start voice input"}
-        title={listening ? "Stop listening" : "Speak to the bot"}
-        className={"voice-btn" + (listening ? " is-listening" : "") + (speaking ? " is-speaking" : "")}
+        aria-label={
+          errored
+            ? "Voice input unavailable — network blocked it. Click to dismiss."
+            : listening
+            ? "Stop listening (voice input on)"
+            : "Start voice input"
+        }
+        title={
+          errored
+            ? "Voice input unavailable on this network. Click to dismiss."
+            : listening
+            ? "Stop listening"
+            : "Speak to the bot"
+        }
+        className={
+          "voice-btn" +
+          (listening ? " is-listening" : "") +
+          (speaking ? " is-speaking" : "") +
+          (errored ? " is-errored" : "")
+        }
       >
         {listening && <span aria-hidden="true" className="voice-btn__pulse" />}
         <svg
@@ -375,6 +476,11 @@ export function VoiceButton({ onTranscript, speakingText, disabled }: Props) {
           color: white;
           background: var(--terracotta);
           border-color: var(--terracotta-deep);
+        }
+        .voice-btn.is-errored {
+          color: oklch(0.40 0.16 25);
+          background: oklch(0.97 0.04 25);
+          border-color: oklch(0.80 0.10 25);
         }
         .voice-btn__pulse {
           position: absolute;
