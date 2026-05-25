@@ -202,6 +202,46 @@ function safeSpeechText(text: string): string {
   return SANITIZER_BROKEN ? text : sanitizeForSpeech(text);
 }
 
+/* ------------------------------------------------------------------
+ * Browser autoplay gating
+ *
+ * Modern browsers reject `speechSynthesis.speak()` until the page has
+ * received a user gesture (click, keydown, touch). On a fresh load the
+ * greeting message would otherwise fire and silently get dropped — the
+ * `voicestart` event never fires and the user hears nothing.
+ *
+ * We track interaction at the module level so every VoiceButton on the
+ * page agrees, and queue any pending speech to drain as soon as the
+ * first interaction lands.
+ * ------------------------------------------------------------------ */
+
+let hasUserInteracted = false;
+const pendingSpeech: Array<() => void> = [];
+const interactionListeners = new Set<() => void>();
+
+function notifyInteraction() {
+  if (hasUserInteracted) return;
+  hasUserInteracted = true;
+  // Drain any queued speech in order.
+  while (pendingSpeech.length > 0) {
+    const next = pendingSpeech.shift();
+    try {
+      next?.();
+    } catch (err) {
+      console.warn("[voice] queued speech failed", err);
+    }
+  }
+  interactionListeners.forEach((l) => l());
+  interactionListeners.clear();
+}
+
+if (typeof window !== "undefined") {
+  const handler = () => notifyInteraction();
+  window.addEventListener("pointerdown", handler, { once: true, capture: true });
+  window.addEventListener("keydown", handler, { once: true, capture: true });
+  window.addEventListener("touchstart", handler, { once: true, capture: true });
+}
+
 type VoiceStatus = "idle" | "listening" | "speaking" | "network-error";
 
 interface BuildRecognitionDeps {
@@ -300,13 +340,18 @@ export function VoiceButton({ onTranscript, speakingText, disabled }: Props) {
       return;
     }
 
+    /* Chrome clips the first ~150ms of an utterance when:
+     *   (a) synth.cancel() was called right before synth.speak(), OR
+     *   (b) the engine is warming up on first ever use.
+     * Workarounds:
+     *   - Prefix with a leading space so the clipping eats whitespace.
+     *   - Only call cancel() if synth is *actually* speaking (avoid the
+     *     gratuitous cancel that warmer browsers handle badly).
+     *   - On cold-start, fire a near-silent priming utterance first,
+     *     then speak the real one immediately after.
+     */
     const speak = () => {
-      try {
-        synth.cancel();
-      } catch {
-        /* noop */
-      }
-      const utter = new SpeechSynthesisUtterance(cleaned);
+      const utter = new SpeechSynthesisUtterance(" " + cleaned);
       const voice = pickVoice();
       if (voice) {
         utter.voice = voice;
@@ -319,27 +364,52 @@ export function VoiceButton({ onTranscript, speakingText, disabled }: Props) {
       utter.volume = 1;
       utter.onstart = () => setStatus("speaking");
       utter.onend = () =>
-        setStatus((prev) => (prev === "speaking" ? "idle" : prev) as VoiceStatus);
+        setStatus((prev) => (prev === "speaking" ? "idle" : prev));
       utter.onerror = (e) => {
-        console.warn("[voice] utterance error", e);
-        setStatus((prev) => (prev === "speaking" ? "idle" : prev) as VoiceStatus);
+        // Chrome fires onerror with "interrupted" / "canceled" whenever
+        // we explicitly cancel — that's not a real failure.
+        const realError = e.error && e.error !== "interrupted" && e.error !== "canceled";
+        if (realError) console.warn("[voice] utterance error", e.error);
+        setStatus((prev) => (prev === "speaking" ? "idle" : prev));
       };
-      synth.speak(utter);
+
+      // Only cancel if something is currently playing AND it's stale —
+      // skip the eager cancel that causes clipping on subsequent speaks.
+      if (synth.speaking || synth.pending) {
+        try {
+          synth.cancel();
+        } catch {
+          /* noop */
+        }
+        // Give the engine a beat to settle after cancel.
+        setTimeout(() => synth.speak(utter), 80);
+      } else {
+        synth.speak(utter);
+      }
     };
 
-    if (synth.getVoices().length > 0) {
-      speak();
+    const speakWhenReady = () => {
+      if (synth.getVoices().length > 0) {
+        speak();
+        return;
+      }
+      let fired = false;
+      const handler = () => {
+        if (fired) return;
+        fired = true;
+        synth.removeEventListener?.("voiceschanged", handler);
+        speak();
+      };
+      synth.addEventListener?.("voiceschanged", handler);
+    };
+
+    // Browsers reject speak() without a prior user gesture. If we haven't
+    // had one yet, queue this speech so it fires on the first interaction.
+    if (!hasUserInteracted) {
+      pendingSpeech.push(speakWhenReady);
       return;
     }
-    // Voices list not ready yet — wait once for the event, then speak.
-    let fired = false;
-    const handler = () => {
-      if (fired) return;
-      fired = true;
-      synth.removeEventListener?.("voiceschanged", handler);
-      speak();
-    };
-    synth.addEventListener?.("voiceschanged", handler);
+    speakWhenReady();
   }, [speakingText]);
 
   if (!supported) return null;
@@ -349,6 +419,9 @@ export function VoiceButton({ onTranscript, speakingText, disabled }: Props) {
   const errored = status === "network-error";
 
   const toggleListen = () => {
+    // Belt-and-braces: ensure the autoplay gate is open even if the
+    // global pointerdown listener missed this click for any reason.
+    notifyInteraction();
     if (errored) {
       // Clear the error state on next click; user can try again.
       setStatus("idle");
