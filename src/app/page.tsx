@@ -243,6 +243,8 @@ export default function Home() {
           width: min(720px, 100%);
           aspect-ratio: 16/9;
           display: grid; place-items: center;
+          /* Decorative — never intercept clicks meant for the CTAs above. */
+          pointer-events: none;
         }
         .hero__plinth {
           position: absolute;
@@ -460,6 +462,8 @@ function ProductTile({ kind, eyebrow, title, sub, theme, href }: ProductTileProp
           width: min(640px, 100%);
           aspect-ratio: 16/10;
           display: grid; place-items: center;
+          /* Decorative — orb halo should never block the chevron links above. */
+          pointer-events: none;
         }
         .ptile__plinth {
           position: absolute;

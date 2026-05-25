@@ -85,7 +85,11 @@ export function Orb({
             inset 0 8px 20px rgba(255, 255, 255, 0.2);
           isolation: isolate;
           transform-style: preserve-3d;
+          /* Orbs are purely decorative — never block clicks on links/buttons
+             that sit underneath the halo/ring overhang. */
+          pointer-events: none;
         }
+        .orb-3d * { pointer-events: none; }
         .orb-3d__halo {
           position: absolute;
           inset: -30%;
