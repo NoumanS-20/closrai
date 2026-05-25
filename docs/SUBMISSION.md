@@ -18,20 +18,23 @@ Open Innovation
 
 (Rationale: the submission covers Sales Bot + Support Chat Bot + Customer Care Bot tracks on a single shared agent runtime — the platform itself is the innovation. Submitting under any single bot track would underrepresent the work.)
 
-## Project Description (≥50 words — this one is ~150)
+## Project Description (≥50 words — this one is ~170)
 
 ```
 ClosrAI Platform is a multi-track AI bot runtime that ships three production-grade
-bots from a single agent core: a B2B SaaS Sales SDR, a knowledge-base-grounded
+bots from one shared agent core: a B2B SaaS Sales SDR, a knowledge-base-grounded
 Support Agent, and a D2C Customer Care agent. All three share one runAgentTurn(),
-one Skeptic-vs-Closer multi-agent debate sub-system for handling objections, and
-one transparent per-persona IQ scorer (Deal IQ for Sales, Resolution IQ for
-Support, Care IQ for Care) streamed live to a unified founder dashboard. The
-platform ships with nine real tools (gated per persona), browser-native voice
-mode using the Web Speech API, and a one-line script-tag embed that drops a
-configured bot onto any third-party website. Built on Next.js 16, Groq's free
-tier (Llama 3.3 70B + 3.1 8B), and Tailwind 4, with three-tier auto-falling-back
-persistence (Upstash → file → memory) and graceful no-key degradation.
+one Skeptic-vs-Closer multi-agent debate sub-system that handles every objection
+with explainable internal reasoning, and one transparent per-persona IQ scorer
+(Deal IQ, Resolution IQ, Care IQ) streamed live to a unified founder dashboard.
+Nine real tools gated per persona — live company enrichment, KB search, order
+lookup, refund processing, calendar booking, human escalation, follow-up email
+drafting. Browser-native voice mode with engine priming, emoji sanitization, and
+cancel-on-click. One-line script-tag embed with a live persona switcher and
+clean SPA teardown. Built-in accessibility: five-toggle settings panel, ARIA
+live regions, skip-to-content, OS reduced-motion detection. Next.js 16, Groq's
+free tier (Llama 3.3 70B + 3.1 8B), Upstash Redis persistence, warm Apple-style
+design language with hand-rendered 3D CSS orbs.
 ```
 
 ## Required links
