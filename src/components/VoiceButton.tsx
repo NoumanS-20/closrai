@@ -206,22 +206,46 @@ function safeSpeechText(text: string): string {
  * Browser autoplay gating
  *
  * Modern browsers reject `speechSynthesis.speak()` until the page has
- * received a user gesture (click, keydown, touch). On a fresh load the
- * greeting message would otherwise fire and silently get dropped — the
- * `voicestart` event never fires and the user hears nothing.
+ * received a user gesture. There is NO way around this on the very first
+ * ever load — it's enforced by the browser engine, not the spec.
  *
- * We track interaction at the module level so every VoiceButton on the
- * page agrees, and queue any pending speech to drain as soon as the
- * first interaction lands.
+ * What we CAN do: remember in localStorage that the user has interacted
+ * with this site before. On subsequent visits, the gate starts open,
+ * autoplay works immediately, and the greeting speaks the moment the
+ * page renders.
+ *
+ * We also still listen for the first live gesture so the FIRST visit
+ * unlocks as soon as the user clicks anything (which then drains the
+ * pending speech queue and writes the localStorage flag for next time).
  * ------------------------------------------------------------------ */
 
-let hasUserInteracted = false;
+const INTERACTION_KEY = "closrai.voice.interacted";
+
+function hasPriorInteractionInStorage(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(INTERACTION_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+let hasUserInteracted = hasPriorInteractionInStorage();
 const pendingSpeech: Array<() => void> = [];
 const interactionListeners = new Set<() => void>();
 
 function notifyInteraction() {
-  if (hasUserInteracted) return;
-  hasUserInteracted = true;
+  if (!hasUserInteracted) {
+    hasUserInteracted = true;
+    try {
+      window.localStorage.setItem(INTERACTION_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+    console.info(
+      "[voice] first user interaction — autoplay unlocked for this and future visits",
+    );
+  }
   // Drain any queued speech in order.
   while (pendingSpeech.length > 0) {
     const next = pendingSpeech.shift();
@@ -240,6 +264,15 @@ if (typeof window !== "undefined") {
   window.addEventListener("pointerdown", handler, { once: true, capture: true });
   window.addEventListener("keydown", handler, { once: true, capture: true });
   window.addEventListener("touchstart", handler, { once: true, capture: true });
+  if (hasUserInteracted) {
+    console.info(
+      "[voice] prior interaction found in localStorage — greeting will autoplay",
+    );
+  } else {
+    console.info(
+      "[voice] no prior interaction — greeting queued until first click/keypress",
+    );
+  }
 }
 
 type VoiceStatus = "idle" | "listening" | "speaking" | "network-error";
