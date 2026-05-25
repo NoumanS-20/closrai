@@ -125,23 +125,81 @@ function pickVoice(): SpeechSynthesisVoice | null {
  * via the \p{...} script class. Then collapses any whitespace the removal
  * leaves behind.
  */
+// All regexes are built from STRINGS with explicit \u escape sequences so the
+// source file stays pure ASCII. Previously, literal emoji characters were
+// pasted into character classes and got mangled by Git CRLF normalization,
+// causing the sanitizer to silently strip legitimate text and break voice
+// playback entirely.
+
+const EMOJI_PROPERTY_RE: RegExp | null = (() => {
+  try {
+    return new RegExp("\\p{Extended_Pictographic}", "gu");
+  } catch {
+    return null;
+  }
+})();
+
+// Fallback for engines without property escapes. Covers:
+//   U+2600 – U+27BF    Miscellaneous Symbols + Dingbats
+//   U+D83C – U+D83E    high surrogates for the U+1F000–U+1FAFF emoji planes
+const EMOJI_RANGE_RE = new RegExp(
+  "[\\u2600-\\u27BF]|[\\uD83C-\\uD83E][\\uDC00-\\uDFFF]",
+  "g",
+);
+
+// Invisible joiners and selectors that often follow emoji:
+//   FE0F variation selector 16
+//   200D zero-width joiner
+//   200B zero-width space
+//   2060 word-joiner
+const INVISIBLES_RE = new RegExp("[\\uFE0F\\u200D\\u200B\\u2060]", "g");
+
+const WHITESPACE_RE = /\s+/g;
+
 function sanitizeForSpeech(text: string): string {
   if (!text) return text;
   let out = text;
-  // Strip emoji / pictographs / symbols. Two passes for engines that don't
-  // support property escapes — first the property-escape pass, then a fallback
-  // range-based pass for older runtimes.
-  try {
-    out = out.replace(/\p{Extended_Pictographic}/gu, "");
-  } catch {
-    // Older engine; fall back to a coarse surrogate range strip
-    out = out.replace(/[‍☀-➿\ud83c-\ud83e][퀀-\udfff]?/g, "");
+  if (EMOJI_PROPERTY_RE) {
+    out = out.replace(EMOJI_PROPERTY_RE, "");
+  } else {
+    out = out.replace(EMOJI_RANGE_RE, "");
   }
-  // Strip variation selectors + zero-width joiners that may linger
-  out = out.replace(/[‍️​]/g, "");
-  // Collapse repeated whitespace and trim
-  out = out.replace(/\s+/g, " ").trim();
+  out = out.replace(INVISIBLES_RE, "");
+  out = out.replace(WHITESPACE_RE, " ").trim();
   return out;
+}
+
+// Module-load self-test: if the sanitizer ever destroys plain text, log loudly
+// AND fall back to a no-op so voice never silently goes dark again.
+const SANITIZER_BROKEN = (() => {
+  try {
+    if (sanitizeForSpeech("Hello world") !== "Hello world") return true;
+    if (
+      sanitizeForSpeech("Plan starts at $19 a month") !==
+      "Plan starts at $19 a month"
+    ) {
+      return true;
+    }
+    if (
+      sanitizeForSpeech("Three bots, made for everyone.") !==
+      "Three bots, made for everyone."
+    ) {
+      return true;
+    }
+    return false;
+  } catch {
+    return true;
+  }
+})();
+
+if (SANITIZER_BROKEN) {
+  console.error(
+    "[voice] sanitizeForSpeech self-test failed — falling back to identity",
+  );
+}
+
+function safeSpeechText(text: string): string {
+  return SANITIZER_BROKEN ? text : sanitizeForSpeech(text);
 }
 
 export function VoiceButton({ onTranscript, speakingText, disabled }: Props) {
@@ -201,8 +259,10 @@ export function VoiceButton({ onTranscript, speakingText, disabled }: Props) {
     const synth = window.speechSynthesis;
     if (!synth) return;
 
-    const cleaned = sanitizeForSpeech(speakingText);
-    if (!cleaned) return; // nothing speakable after stripping emojis/symbols
+    // safeSpeechText falls back to identity if the sanitizer self-test failed —
+    // we never want to leave voice silent because emoji-stripping went wrong.
+    const cleaned = safeSpeechText(speakingText);
+    if (!cleaned) return;
 
     synth.cancel();
 
