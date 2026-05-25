@@ -514,6 +514,55 @@ export function VoiceButton({ onTranscript, speakingText, disabled }: Props) {
     speakWhenReady();
   }, [speakingText]);
 
+  /**
+   * Stop speaking when the user clicks something outside the chat input.
+   * Active only while status === "speaking" so we don't keep a dangling
+   * listener on the document the rest of the time.
+   *
+   * Exception: typing in <input>/<textarea>/[contenteditable] should NOT
+   * cancel — that's a normal follow-up typing pattern while listening
+   * to the previous reply.
+   */
+  useEffect(() => {
+    if (status !== "speaking") return;
+    if (typeof document === "undefined") return;
+
+    const isTypingTarget = (target: EventTarget | null): boolean => {
+      if (!(target instanceof Element)) return false;
+      const el = target as HTMLElement;
+      if (el.matches("input, textarea, [contenteditable=\"true\"]")) return true;
+      // Also walk up — clicks inside a label-wrapped input should not cancel
+      return Boolean(el.closest("input, textarea, [contenteditable=\"true\"]"));
+    };
+
+    const onPointerDown = (ev: PointerEvent) => {
+      if (isTypingTarget(ev.target)) return;
+      const synth = window.speechSynthesis;
+      if (!synth) return;
+      try {
+        synth.cancel();
+      } catch {
+        /* noop */
+      }
+      setStatus((prev) => (prev === "speaking" ? "idle" : prev));
+    };
+
+    // Capture phase so we run before the click reaches any component
+    // handler that might depend on the speaking state.
+    document.addEventListener("pointerdown", onPointerDown, { capture: true });
+    document.addEventListener("keydown", onPointerDown as unknown as EventListener, {
+      capture: true,
+    });
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, { capture: true });
+      document.removeEventListener(
+        "keydown",
+        onPointerDown as unknown as EventListener,
+        { capture: true },
+      );
+    };
+  }, [status]);
+
   if (!supported) return null;
 
   const listening = status === "listening";
