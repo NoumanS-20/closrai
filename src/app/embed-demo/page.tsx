@@ -1,5 +1,5 @@
 import Link from "next/link";
-import Script from "next/script";
+import { EmbedLoader } from "@/components/EmbedLoader";
 
 export const metadata = {
   title: "Acme Wellness — Embed Demo",
@@ -10,7 +10,7 @@ export const metadata = {
 export default function EmbedDemoPage() {
   return (
     <main id="main" tabIndex={-1} className="ed">
-      <Script src="/embed.js" data-persona="care" strategy="afterInteractive" />
+      <EmbedLoader persona="care" />
 
       <div className="ed__banner">
         <span>

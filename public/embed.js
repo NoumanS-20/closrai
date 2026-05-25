@@ -1,5 +1,14 @@
 (function () {
   "use strict";
+  // If a previous load is still mounted (e.g. SPA navigation back to the
+  // embed-demo page), tear it down before re-mounting fresh.
+  if (typeof window.__closrAiEmbedTeardown === "function") {
+    try {
+      window.__closrAiEmbedTeardown();
+    } catch {
+      /* noop */
+    }
+  }
   if (window.__closrAiEmbedLoaded) return;
   window.__closrAiEmbedLoaded = true;
 
@@ -150,20 +159,21 @@
     setOpen(false);
   });
 
-  window.addEventListener("message", function (ev) {
+  function onMessage(ev) {
     if (ev.origin !== origin) return;
     if (ev.source !== iframe.contentWindow) return;
     if (ev.data && ev.data.type === "closrai:close") {
       setOpen(false);
     }
-  });
-
-  document.addEventListener("keydown", function (ev) {
+  }
+  function onKeyDown(ev) {
     if (ev.key === "Escape" && panel.style.display !== "none") {
       ev.preventDefault();
       setOpen(false);
     }
-  });
+  }
+  window.addEventListener("message", onMessage);
+  document.addEventListener("keydown", onKeyDown);
 
   function mount() {
     document.body.appendChild(launcher);
@@ -175,4 +185,33 @@
   } else {
     mount();
   }
+
+  // Expose a teardown function so the host page can remove the launcher
+  // cleanly on SPA unmount. Calling it removes the launcher + panel from
+  // the DOM, detaches all listeners, and clears the loaded flag so a
+  // subsequent script load mounts fresh.
+  window.__closrAiEmbedTeardown = function () {
+    try {
+      if (launcher.parentNode) launcher.parentNode.removeChild(launcher);
+    } catch {
+      /* noop */
+    }
+    try {
+      if (panel.parentNode) panel.parentNode.removeChild(panel);
+    } catch {
+      /* noop */
+    }
+    try {
+      window.removeEventListener("message", onMessage);
+    } catch {
+      /* noop */
+    }
+    try {
+      document.removeEventListener("keydown", onKeyDown);
+    } catch {
+      /* noop */
+    }
+    window.__closrAiEmbedLoaded = false;
+    window.__closrAiEmbedTeardown = undefined;
+  };
 })();
