@@ -275,6 +275,60 @@ if (typeof window !== "undefined") {
   }
 }
 
+/* ------------------------------------------------------------------
+ * Engine priming
+ *
+ * Chrome's speechSynthesis pipeline cold-starts SLOW — the first
+ * speak() of the session loses 200-400ms of audio at the start (the
+ * "first words cut off" symptom). Workaround: fire a silent priming
+ * utterance once per session BEFORE the first real one. By the time
+ * we speak the real text, the audio pipeline is already warmed up
+ * and onstart fires cleanly.
+ *
+ * We resolve the returned promise when priming completes (onend fires,
+ * or 1.2s safety timeout — whichever first). All real speech awaits
+ * this primingDone before queueing.
+ * ------------------------------------------------------------------ */
+
+let primingDone: Promise<void> | null = null;
+
+function primeEngine(): Promise<void> {
+  if (primingDone) return primingDone;
+  if (typeof window === "undefined" || !window.speechSynthesis) {
+    primingDone = Promise.resolve();
+    return primingDone;
+  }
+  primingDone = new Promise<void>((resolve) => {
+    const synth = window.speechSynthesis;
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      console.info("[voice] engine primed");
+      resolve();
+    };
+    try {
+      // ". " — short, has a leading silence + something to actually voice
+      // so the engine commits to spinning up the pipeline. volume=0 keeps
+      // it inaudible to the user.
+      const primer = new SpeechSynthesisUtterance(". ");
+      primer.volume = 0;
+      primer.rate = 1;
+      primer.pitch = 1;
+      primer.onend = finish;
+      primer.onerror = finish;
+      synth.speak(primer);
+      // Safety: if onend never fires (some browsers silently skip
+      // volume=0 utterances), unblock after 1.2s anyway.
+      setTimeout(finish, 1200);
+    } catch (err) {
+      console.warn("[voice] priming failed", err);
+      finish();
+    }
+  });
+  return primingDone;
+}
+
 type VoiceStatus = "idle" | "listening" | "speaking" | "network-error";
 
 interface BuildRecognitionDeps {
@@ -421,9 +475,24 @@ export function VoiceButton({ onTranscript, speakingText, disabled }: Props) {
       }
     };
 
+    /**
+     * Prime the engine first (silent warm-up), then a short natural pause,
+     * then speak. This is what fixes "first words clipped" — by the time
+     * `speak()` runs, the audio pipeline is already streaming so onstart
+     * lines up with real audio output.
+     *
+     * 220ms gap reads as natural conversational latency (the bot "thought
+     * for a moment"), not awkward silence.
+     */
     const speakWhenReady = () => {
+      const startSpeaking = () => {
+        primeEngine().then(() => {
+          setTimeout(speak, 220);
+        });
+      };
+
       if (synth.getVoices().length > 0) {
-        speak();
+        startSpeaking();
         return;
       }
       let fired = false;
@@ -431,7 +500,7 @@ export function VoiceButton({ onTranscript, speakingText, disabled }: Props) {
         if (fired) return;
         fired = true;
         synth.removeEventListener?.("voiceschanged", handler);
-        speak();
+        startSpeaking();
       };
       synth.addEventListener?.("voiceschanged", handler);
     };
