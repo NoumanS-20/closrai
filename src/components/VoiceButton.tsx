@@ -41,55 +41,107 @@ function subscribeNoop(): () => void {
 }
 
 /**
- * Pick the smoothest available TTS voice. Preference order:
- * 1. Indian-English natural/online voices (Google/Microsoft/Apple)
- * 2. Any US/UK/AU English natural/online voice
- * 3. Default English voice
+ * Pick the smoothest available TTS voice.
+ *
+ * Honest constraint: Web Speech API quality depends entirely on the OS/browser
+ * voices installed. On Windows the LOCAL Microsoft voices (David / Zira / Mark
+ * / Hazel) sound robotic and mispronounce common words. The "Online" / "Natural"
+ * voices that ship with modern Edge / Chrome are dramatically better. We
+ * explicitly exclude the bad local Microsoft voices and rank what's left.
  */
+const BAD_VOICE_NAMES = [
+  "Microsoft David",
+  "Microsoft Mark",
+  "Microsoft Zira",
+  "Microsoft Hazel",
+  "Microsoft Heera",
+  "Microsoft Ravi",
+  "Microsoft Sean",
+  "Microsoft James",
+  "Microsoft Catherine",
+];
+
+function isBadVoice(v: SpeechSynthesisVoice): boolean {
+  return BAD_VOICE_NAMES.some((bad) => v.name.startsWith(bad));
+}
+
+function scoreVoice(v: SpeechSynthesisVoice): number {
+  let score = 0;
+  const name = v.name;
+
+  // Strongly prefer the new Microsoft "Online (Natural)" neural voices
+  if (/Online \(Natural\)/i.test(name)) score += 100;
+  // Generic "Natural" / "Neural" / "Online" / "Premium" / "Enhanced" hints
+  if (/\bnatural\b/i.test(name)) score += 60;
+  if (/\bneural\b/i.test(name)) score += 60;
+  if (/\bonline\b/i.test(name)) score += 50;
+  if (/\bpremium\b/i.test(name)) score += 50;
+  if (/\benhanced\b/i.test(name)) score += 40;
+
+  // Known-good named voices across platforms
+  if (/^Google\b/i.test(name)) score += 70;
+  if (/^Samantha$/i.test(name)) score += 70; // macOS / iOS
+  if (/^Karen$/i.test(name)) score += 60; // macOS AU
+  if (/^Daniel$/i.test(name)) score += 60; // macOS GB
+  if (/^Aria$/i.test(name)) score += 60;
+  if (/^Jenny$/i.test(name)) score += 60;
+  if (/^Sonia$/i.test(name)) score += 60;
+  if (/^Libby$/i.test(name)) score += 60;
+  if (/^Neerja$/i.test(name)) score += 60; // Indian English
+
+  // Locale preference (en-IN > en-GB > en-US > other en)
+  if (v.lang === "en-IN") score += 12;
+  else if (v.lang === "en-GB") score += 8;
+  else if (v.lang === "en-US") score += 6;
+  else if (v.lang.startsWith("en")) score += 3;
+
+  return score;
+}
+
 function pickVoice(): SpeechSynthesisVoice | null {
   if (typeof window === "undefined" || !window.speechSynthesis) return null;
   const voices = window.speechSynthesis.getVoices();
   if (voices.length === 0) return null;
 
-  // Names we know to be smoother than the robotic Microsoft David/Zira defaults.
-  const PREFERRED_NAME_HINTS = [
-    "Google UK English Female",
-    "Google US English",
-    "Google English",
-    "Samantha",
-    "Karen",
-    "Daniel",
-    "Microsoft Neerja Online",
-    "Microsoft Aria Online",
-    "Microsoft Jenny Online",
-    "Microsoft Guy Online",
-    "Microsoft Sonia Online",
-    "Microsoft Libby Online",
-    "Natural",
-  ];
+  const candidates = voices
+    .filter((v) => v.lang.startsWith("en"))
+    .filter((v) => !isBadVoice(v));
 
-  const englishVoices = voices.filter((v) => v.lang.startsWith("en"));
-
-  // First pass: explicit preferred names
-  for (const hint of PREFERRED_NAME_HINTS) {
-    const match = englishVoices.find((v) => v.name.includes(hint));
-    if (match) return match;
+  if (candidates.length === 0) {
+    // All English voices were filtered out — fall back to any English voice
+    return voices.find((v) => v.lang.startsWith("en")) ?? null;
   }
 
-  // Second pass: any "natural"/"online"/"neural" voice
-  const naturalish = englishVoices.find((v) =>
-    /natural|online|neural|premium/i.test(v.name),
-  );
-  if (naturalish) return naturalish;
+  candidates.sort((a, b) => scoreVoice(b) - scoreVoice(a));
+  return candidates[0];
+}
 
-  // Third pass: prefer en-IN, else any English
-  return (
-    englishVoices.find((v) => v.lang === "en-IN") ??
-    englishVoices.find((v) => v.lang === "en-GB") ??
-    englishVoices.find((v) => v.lang === "en-US") ??
-    englishVoices[0] ??
-    null
-  );
+/**
+ * Strip content that screen-to-speech engines either skip, mis-read, or read
+ * literally ("waving hand", "smiling face with smiling eyes", etc.). We sanitize
+ * ONLY the text passed to TTS — the on-screen message keeps its emoji.
+ *
+ * The regex matches Unicode "Symbol" + "Pictograph" + "Emoji_Component" ranges
+ * via the \p{...} script class. Then collapses any whitespace the removal
+ * leaves behind.
+ */
+function sanitizeForSpeech(text: string): string {
+  if (!text) return text;
+  let out = text;
+  // Strip emoji / pictographs / symbols. Two passes for engines that don't
+  // support property escapes — first the property-escape pass, then a fallback
+  // range-based pass for older runtimes.
+  try {
+    out = out.replace(/\p{Extended_Pictographic}/gu, "");
+  } catch {
+    // Older engine; fall back to a coarse surrogate range strip
+    out = out.replace(/[‍☀-➿\ud83c-\ud83e][퀀-\udfff]?/g, "");
+  }
+  // Strip variation selectors + zero-width joiners that may linger
+  out = out.replace(/[‍️​]/g, "");
+  // Collapse repeated whitespace and trim
+  out = out.replace(/\s+/g, " ").trim();
+  return out;
 }
 
 export function VoiceButton({ onTranscript, speakingText, disabled }: Props) {
@@ -148,10 +200,14 @@ export function VoiceButton({ onTranscript, speakingText, disabled }: Props) {
     lastSpokenRef.current = speakingText;
     const synth = window.speechSynthesis;
     if (!synth) return;
+
+    const cleaned = sanitizeForSpeech(speakingText);
+    if (!cleaned) return; // nothing speakable after stripping emojis/symbols
+
     synth.cancel();
 
     const speak = () => {
-      const utter = new SpeechSynthesisUtterance(speakingText);
+      const utter = new SpeechSynthesisUtterance(cleaned);
       const voice = pickVoice();
       if (voice) {
         utter.voice = voice;
@@ -159,9 +215,10 @@ export function VoiceButton({ onTranscript, speakingText, disabled }: Props) {
       } else {
         utter.lang = "en-IN";
       }
-      // Slightly slower + warmer pitch than defaults — friendlier, less rushed
-      utter.rate = 0.96;
-      utter.pitch = 1.05;
+      // Steady, unhurried delivery. Rate down a touch + neutral pitch makes
+      // a big difference on the cheaper voices' pronunciation.
+      utter.rate = 0.92;
+      utter.pitch = 1.0;
       utter.volume = 1;
       utter.onstart = () => setSpeaking(true);
       utter.onend = () => setSpeaking(false);
