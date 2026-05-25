@@ -386,7 +386,7 @@ function ProductTile({ kind, eyebrow, title, sub, theme, href }: ProductTileProp
         <h2 className="ptile__title">{title}</h2>
         <p className="ptile__sub">{sub}</p>
         <div className="ptile__ctas">
-          <Link href={href} className="linklike">
+          <Link href="/embed-demo" className="linklike">
             Try the demo <span aria-hidden="true">›</span>
           </Link>
           <Link href={href} className="linklike">
